@@ -2,7 +2,7 @@
 <!--
 LEARNING NOTE (read this first)
 SirFay Wardrobe: one self-contained file. No libraries, fonts or images are loaded from the internet, so it works offline.
-Four views share one page: Rack (the real clothes on rails), List (every item in one list, names link to the store), Shop (the in-store checklist)
+Five views share one page: Rack (the real clothes on rails), List (every item in one list, names link to the store), Shop (the in-store checklist), Help
 and Add (add by link, photos, backup). Data: items live in localStorage, photos in IndexedDB (a bigger in-browser database).
 "Save offline copy" writes a new .html file with every item AND every photo baked into it (photos become "data URLs": the
 image bytes written as text), so the file can be sent to a phone and opened with no connection.
@@ -74,8 +74,8 @@ svg.i{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.7;stro
 @media(min-width:821px){.tabbar{display:none}body{padding-bottom:0}}
 
 /* Views: with JavaScript only the chosen view shows. Without it (a phone's file preview) all views show, stacked. */
-.js .view{display:none}.js .view.on{display:block;animation:fade .35s var(--ease)}
-@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.js .view{display:none}.js .view.on{display:block;animation:viewIn .5s var(--spring)}
+@keyframes viewIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 .vhead{padding:44px 0 18px}
 .vhead h1{font-size:clamp(34px,5.5vw,56px);line-height:1.05;font-weight:700;letter-spacing:-.035em;margin:0}
 .vhead p{color:var(--muted);font-size:clamp(17px,1.8vw,19px);margin:8px 0 0;max-width:640px}
@@ -220,8 +220,12 @@ details.paste summary{cursor:pointer;font-weight:500;font-size:15px}
 /* ---------- ITEM SHEET ---------- */
 dialog.sheet{border:0;padding:0;border-radius:28px;width:min(980px,calc(100% - 24px));max-height:92vh;background:var(--surf);color:var(--text);box-shadow:0 30px 90px rgba(0,0,0,.4);overflow:hidden}
 dialog.sheet::backdrop{background:rgba(12,10,9,.5);backdrop-filter:blur(8px)}
-dialog.sheet[open]{animation:rise .42s var(--ease)}
-@keyframes rise{from{transform:translateY(28px);opacity:0}to{transform:none;opacity:1}}
+dialog.sheet[open]{animation:sheetIn .5s var(--spring)}
+@keyframes sheetIn{from{transform:translateY(40px) scale(.985);opacity:0}to{transform:none;opacity:1}}
+dialog.sheet.closing{animation:sheetOut .22s var(--ease) forwards}
+@keyframes sheetOut{to{transform:translateY(24px);opacity:0}}
+dialog.sheet[open]::backdrop{animation:bdIn .4s var(--ease)}
+@keyframes bdIn{from{opacity:0}}
 @media(max-width:700px){dialog.sheet{width:100%;max-width:100%;max-height:96vh;margin:auto 0 0;border-radius:28px 28px 0 0}}
 .sh{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);max-height:92vh}
 @media(max-width:700px){.sh{grid-template-columns:1fr;max-height:96vh;overflow:auto}}
@@ -271,7 +275,7 @@ dialog.sheet[open]{animation:rise .42s var(--ease)}
 .fld .pk input{width:20px;height:20px;flex:none;padding:0}
 .pk .thumb .sil{transform:scale(.3)}
 /* Helper mode: only the shopping list shows (also without JavaScript). */
-.helper .tabs,.helper .tabbar,.helper .pillrow{display:none}
+.helper .tabs,.helper .tabbar,.helper .pillrow,.helper .navback{display:none}
 body.helper{padding-bottom:0}
 .helper .view{display:none!important}.helper #v-helper{display:block!important}
 .hcard{display:grid;grid-template-columns:200px minmax(0,1fr);gap:20px;background:var(--surf);border-radius:22px;box-shadow:var(--shadow);padding:16px;margin-bottom:12px}
@@ -298,7 +302,61 @@ body.helper{padding-bottom:0}
 @media(min-width:821px){.pbar{bottom:20px}}
 .getph{margin-top:4px;color:var(--muted)}
 footer{color:var(--muted);font-size:13px;text-align:center;padding:50px 20px 30px}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+/* ---------- MOTION (Apple-style) ----------
+   --spring is a fast-out, gentle-settle curve like iOS uses for sheets and presses. Buttons shrink a little while
+   pressed and spring back; tab icons do a small "bounce" when chosen; sections fade up as they scroll into view;
+   hanger hooks sway slowly when idle; the save dot "breathes" while saving. All of it is switched off when the phone
+   asks for reduced motion. */
+:root{--spring:cubic-bezier(.32,.72,0,1)}
+html{scroll-behavior:smooth}
+.btn,.seg button,.tabs button,.tabbar button,.chip,.chk,.linkbtn,.navback,.shx,.thumb,.pk{transition:transform .4s var(--spring),background-color .25s var(--ease),color .25s var(--ease),opacity .25s var(--ease),box-shadow .25s var(--ease)}
+.btn:active,.seg button:active,.tabs button:active,.tabbar button:active,.chip:active,.chk:active,.navback:active,.shx:active,.thumb:active{transform:scale(.94);transition-duration:.1s}
+.piece:active .ph{transform:scale(.97);transition-duration:.12s}
+.tabbar button svg,.tabs button svg{transition:transform .4s var(--spring)}
+.bounce svg{animation:bounce .6s var(--spring)}
+@keyframes bounce{0%{transform:scale(1)}28%{transform:scale(.8)}62%{transform:scale(1.14)}100%{transform:scale(1)}}
+.js .rv{opacity:0;transform:translateY(16px);transition:opacity .6s var(--ease),transform .8s var(--spring)}
+.js .rv.in{opacity:1;transform:none}.js .rv.now{transition:none}
+.piece .hook svg{animation:sway 6s ease-in-out infinite;transform-origin:50% 100%}
+.piece:nth-child(3n+2) .hook svg{animation-delay:-2s}.piece:nth-child(3n) .hook svg{animation-delay:-4s}
+@keyframes sway{0%,100%{transform:rotate(-2.5deg)}50%{transform:rotate(2.5deg)}}
+.pill.ready.saving:before{animation:breathe 1.4s ease-in-out infinite}
+@keyframes breathe{50%{transform:scale(.55);opacity:.45}}
+.hicon svg{animation:float 5s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+/* header: hairline and shadow only once scrolled; the big page title moves into the bar as it scrolls away */
+.top{transition:box-shadow .3s var(--ease),border-color .3s var(--ease)}
+.top:not(.scrolled){border-bottom-color:transparent}
+.top.scrolled{box-shadow:0 1px 0 var(--line),0 6px 20px rgba(0,0,0,.04)}
+.navback{display:inline-flex;align-items:center;gap:1px;border:0;background:none;padding:6px 8px 6px 0;margin-left:-6px;font-size:17px;color:var(--text);cursor:pointer;border-radius:10px;white-space:nowrap;flex:none}
+.navback svg{width:24px;height:24px;stroke:var(--icon);stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.navback[hidden]{display:none}
+.brand{position:relative;min-width:0}
+.brand .bn{display:inline-block;transition:opacity .25s var(--ease),transform .4s var(--spring)}
+.brand .bt{position:absolute;left:0;top:50%;transform:translateY(-20%);opacity:0;transition:opacity .25s var(--ease),transform .4s var(--spring);pointer-events:none;font-weight:600;white-space:nowrap}
+.top.compact .brand .bn{opacity:0;transform:translateY(-8px)}
+.top.compact .brand .bt{opacity:1;transform:translateY(-50%)}
+@media(max-width:560px){.top.hasback .brand .bn{display:none}.top.hasback .brand .bt{position:static;opacity:1;transform:none}}
+/* sheets on phones: a grab bar to swipe down */
+@media(max-width:700px){dialog.sheet[open]{animation:sheetUp .55s var(--spring)}@keyframes sheetUp{from{transform:translateY(100%)}to{transform:none}}
+  dialog.sheet.closing{animation:sheetDown .26s var(--ease) forwards}@keyframes sheetDown{to{transform:translateY(100%)}}
+  dialog.sheet:before{content:"";position:absolute;top:0;left:0;right:0;height:26px;z-index:5;background:radial-gradient(closest-side,var(--faint) 98%,transparent) 50% 9px/40px 5px no-repeat;touch-action:none}}
+/* ---------- HELP ---------- */
+.chip{border:1px solid var(--line);background:var(--surf);border-radius:999px;padding:7px 13px;font-size:14px;cursor:pointer;text-decoration:none;color:var(--text)}
+.toc{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px}
+.help .card{margin-bottom:14px;scroll-margin-top:76px}
+.help .card h3{font-size:21px;letter-spacing:-.02em;margin-bottom:10px}
+.help .card p,.help .card li{font-size:16px;color:var(--muted)}
+.help .card b{color:var(--text);font-weight:600}
+.steps{counter-reset:s;list-style:none;padding:0;margin:8px 0}
+.steps li{counter-increment:s;position:relative;padding-left:40px;margin:14px 0}
+.steps li:before{content:counter(s);position:absolute;left:0;top:-1px;width:27px;height:27px;border-radius:50%;background:var(--acc);color:var(--ink);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center}
+.legend{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center;margin:8px 0}
+.legend i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.hicon{display:inline-flex;width:56px;height:56px;border-radius:16px;background:var(--acc);align-items:center;justify-content:center;margin-bottom:14px}
+.hicon svg{width:30px;height:30px;stroke:var(--ink);stroke-width:2;fill:none}
+code.k{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;background:var(--sunk);border-radius:6px;padding:1px 6px;color:var(--text);word-break:break-all}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}html{scroll-behavior:auto}.js .rv{opacity:1;transform:none}}
 </style>
 </head>
 <body>
@@ -307,11 +365,13 @@ footer{color:var(--muted);font-size:13px;text-align:center;padding:50px 20px 30p
   <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></symbol>
   <symbol id="i-shop" viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></symbol>
   <symbol id="i-add" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.6"/><circle cx="12" cy="16.8" r=".6"/></symbol>
   <symbol id="i-hook" viewBox="0 0 26 30"><path d="M13 30V18M13 18c0-3 5-3.5 5-8.5a5 5 0 0 0-10 0"/></symbol>
 </svg>
 
 <header class="top"><div class="wrap">
-  <div class="brand">SirFay Wardrobe<small>Canada → Nigeria</small></div>
+  <button class="navback" id="navBack" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span id="navBackT">Back</span></button>
+  <div class="brand"><span class="bn">SirFay Wardrobe<small>Canada → Nigeria</small></span><span class="bt" id="navTitle" aria-hidden="true"></span></div>
   <div class="tabs" role="tablist" aria-label="Views" id="tabsTop"></div>
   <div class="pillrow"><span class="pill ready" id="syncPill" title="Works with no internet">Offline</span><span class="pill" id="bfPill"></span></div>
 </div></header>
@@ -406,10 +466,83 @@ footer{color:var(--muted);font-size:13px;text-align:center;padding:50px 20px 30p
             <li>Permissions → Repository → <b>Contents: Read and write</b>. Nothing else.</li>
             <li>Generate, copy the key, paste it here, Save key.</li></ol>
             <p class="muted" style="font-size:13px;margin:0">The key stays in this browser only; it is never put in saved copies or helper copies. Lost the phone? Delete the key on GitHub and it stops working.</p></details>
+          <p style="margin:10px 0 0"><button type="button" class="linkbtn" data-v="help" data-anchor="h-sync">Full guide with pictures of each step: Help → Save changes</button></p>
         </div>
       </aside>
     </div>
   </section>
+  <!-- HELP -->
+  <section class="view help" id="v-help" aria-labelledby="h-help">
+    <div class="vhead"><span class="hicon" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#i-help"/></svg></span><h1 id="h-help">How to.</h1><p>Everything the app can do, step by step. Tap a topic.</p></div>
+    <nav class="toc" aria-label="Topics">
+      <a class="chip" href="#h-start">Quick start</a><a class="chip" href="#h-phone">On your phone</a><a class="chip" href="#h-move">Getting around</a><a class="chip" href="#h-add">Adding items</a><a class="chip" href="#h-photo">Photos</a><a class="chip" href="#h-shop">In the store</a><a class="chip" href="#h-helper">A helper</a><a class="chip" href="#h-sync">Save changes</a><a class="chip" href="#h-fix">Fixing problems</a><a class="chip" href="#h-privacy">Privacy</a>
+    </nav>
+    <div class="card" id="h-start"><h3>Quick start</h3><ol class="steps">
+      <li><b>Rack</b> shows every piece on a hanger. Tap one for the big photo (double-tap or pinch to see the fabric), price, sizes and the store link.</li>
+      <li><b>List</b> shows everything in one list. Tap a <b>name</b> to open the store's page, tap the <b>picture</b> for details, tap the <b>circle</b> when it's bought.</li>
+      <li><b>Shop</b> is for the store: grouped by store, his sizes at the top, type the shelf price to compare.</li>
+      <li><b>Add</b> adds new pieces from a link, sends the list to a helper and saves changes to the website.</li></ol></div>
+    <div class="card" id="h-phone"><h3>Put it on your phone</h3><ol class="steps">
+      <li>Open <code class="k">oldtalez.github.io/sirfay-wardrobe</code> once <b>while you have internet</b>. The phone keeps a copy, so after that it opens with no signal.</li>
+      <li><b>Android (Chrome):</b> menu <b>⋮</b> → <b>Add to Home screen</b>. <b>iPhone (Safari):</b> Share → <b>Add to Home Screen</b>.</li>
+      <li>Open it from the orange hanger icon. It opens like an app, full screen.</li></ol>
+      <p>Store links need internet to open. Everything else works offline.</p></div>
+    <div class="card" id="h-move"><h3>Getting around</h3><ol class="steps">
+      <li>Use the tabs at the bottom (at the top on a computer). Tap the tab you're on to jump back to the top.</li>
+      <li><b>Back</b> takes you to the page you were on: the <b>‹ Back</b> button at the top left, your phone's back gesture or back button. Open details close first.</li>
+      <li>On the first page, going back shows "Go back again to close", so the app doesn't close by accident.</li>
+      <li>Details slide up from the bottom: swipe the grey bar down, tap outside, or tap ✕ to close.</li></ol></div>
+    <div class="card" id="h-add"><h3>Adding items</h3><ol class="steps">
+      <li>Go to <b>Add</b> and paste a product link, then <b>Get details</b>. The app fills in what it can: name, brand, store, price, discount, sizes, material, where it's from.</li>
+      <li>Some stores block apps. Then open <b>No details came through? Paste the product page</b>: on the store page select all and copy, paste it in, tap <b>Read it</b>.</li>
+      <li>Fill in what to buy (size, how many, max price, similar OK) and tap <b>Add to the rack</b>.</li>
+      <li>Many at once: <b>Add many links at once</b>, one link per line. Open each afterwards to check it.</li>
+      <li>To refresh an item later, open it and tap <b>Get details from link</b>.</li></ol></div>
+    <div class="card" id="h-photo"><h3>Adding photos</h3><ol class="steps">
+      <li>In <b>List</b>, tap <b>Add photo from the store</b> under an item. The store page opens and a bar appears at the bottom of the app with that item's name.</li>
+      <li>On the store page, press and hold the product photo and choose <b>Copy</b> (computer: right-click → <b>Copy image</b>).</li>
+      <li>Come back to the app and tap <b>Paste</b> in the bar (computer: Ctrl+V or ⌘V). The plain background is removed and the photo is saved on that item.</li>
+      <li>Saved the picture instead? Tap <b>File</b> and pick it. Inside an item you can also <b>Paste photo</b>, <b>Add photo</b> or <b>Remove this photo</b>.</li></ol>
+      <p>Studio shots on white look best on the rack. Check it's the right colour before pasting.</p></div>
+    <div class="card" id="h-shop"><h3>In the store</h3><ol class="steps">
+      <li>Open <b>Shop</b>. Stores are grouped with the thrift route first. His sizes are at the top; orange ones still need confirming.</li>
+      <li>Type the <b>Shelf $</b> price to see if it's cheaper than online.</li>
+      <li>Tick the circle when it's in the bag. The spent total and budget bar update.</li></ol></div>
+    <div class="card" id="h-helper"><h3>Sending the list to a helper</h3><ol class="steps">
+      <li>In <b>Shop</b>, tap <b>Send the list</b>, add their name and a message, pick the items.</li>
+      <li><b>Send helper copy</b> makes one file with every detail and photo. Send it on WhatsApp. It opens on their phone with no internet.</li>
+      <li>They tap <b>Got it / Got similar / Not found</b>, add the price and a photo, then <b>Send update</b>.</li>
+      <li>You tap <b>Import their update</b> in Shop and pick their file. Your list is ticked for you.</li></ol>
+      <p>Or simply send them the website link: they see the latest list.</p></div>
+    <div class="card" id="h-sync"><h3>Save changes to the website (GitHub key)</h3>
+      <p>Without a key, ticks and photos stay on the phone you made them on. With a key, they save to the website by themselves and <b>everyone who opens the link gets them</b>. You make the key once per phone.</p>
+      <p><b>Make the key</b></p><ol class="steps">
+      <li>On the phone, open <code class="k">github.com/settings/personal-access-tokens/new</code> and sign in as <b>OldTalez</b>.</li>
+      <li><b>Token name:</b> "Wardrobe phone". <b>Expiration:</b> pick a date (90 days is fine; make a new one when it ends).</li>
+      <li><b>Repository access:</b> choose <b>Only select repositories</b> and pick <b>sirfay-wardrobe</b>.</li>
+      <li><b>Permissions → Repository permissions → Contents:</b> set to <b>Read and write</b>. Leave everything else as it is.</li>
+      <li>Tap <b>Generate token</b>, then copy the key. It starts with <code class="k">github_pat_</code>. GitHub shows it only once.</li></ol>
+      <p><b>Put it in the app</b></p><ol class="steps">
+      <li>Open the app from the website link (not a saved file), go to <b>Add</b> → <b>Save changes to the website</b>.</li>
+      <li>Paste the key and tap <b>Save key</b>. It says "Key saved" when GitHub accepts it.</li>
+      <li>That's it. Change something: a few seconds after you stop, it saves. Offline? It saves when you're back online.</li></ol>
+      <p><b>The dot at the top tells you how it's going</b></p>
+      <div class="legend"><i style="background:var(--ok)"></i><span><b>Green</b>: saved, or up to date.</span><i style="background:var(--acc)"></i><span><b>Orange, breathing</b>: saving, or waiting for internet.</span><i style="background:#dc2626"></i><span><b>Red</b>: not saved. Tap and hold it to read why, or open Add and tap <b>Sync now</b>.</span></div>
+      <p>Other phones get the changes the next time they open the link with internet. The website itself updates about a minute after a save. Two phones can save at the same time: both changes are kept, the newest change to each item wins.</p>
+      <p><b>Lost the phone, or done?</b> Open <code class="k">github.com/settings/personal-access-tokens</code>, open "Wardrobe phone" and <b>Delete</b>. It stops working at once. On a phone you keep, <b>Remove key</b> in Add takes it off.</p></div>
+    <div class="card" id="h-fix"><h3>Fixing problems</h3><ul style="padding-left:18px;margin:6px 0">
+      <li><b>Red dot, "GitHub 401":</b> the key is wrong or expired. Make a new one and Save key.</li>
+      <li><b>Red dot, "GitHub 403" or "404":</b> the key can't write to sirfay-wardrobe. Check <b>Only select repositories → sirfay-wardrobe</b> and <b>Contents: Read and write</b>.</li>
+      <li><b>Another phone doesn't show my change:</b> open the link there with internet, wait a minute, pull down or reopen. Make sure the dot on your phone went green.</li>
+      <li><b>Paste does nothing:</b> copy the photo again, or save it and use <b>File</b>. Some browsers ask permission to read the clipboard: allow it.</li>
+      <li><b>"Get details" finds nothing:</b> the store blocks apps. Use <b>Paste the product page</b>.</li>
+      <li><b>A new version came out:</b> it never removes your ticks, prices or photos; changes merge item by item.</li></ul></div>
+    <div class="card" id="h-privacy"><h3>Privacy</h3><ul style="padding-left:18px;margin:6px 0">
+      <li>The website is public: anyone with the link can see the list, his sizes and the photos. Search engines are told not to list it.</li>
+      <li>The GitHub key stays in your phone's browser. It is never put in saved copies, helper copies or the website.</li>
+      <li>"Get details" sends only the product link to the r.jina.ai reader. Untick it in Add if you'd rather not.</li></ul></div>
+  </section>
+
   <section class="view" id="v-helper" aria-label="Shopping list"></section>
 </main>
 <footer>SirFay Wardrobe · Everything is saved inside this browser, and inside any offline copy you save.</footer>
@@ -722,7 +855,7 @@ async function readLink(u,signal){const r=await fetch("https://r.jina.ai/"+u,{si
    Each view has one render function. render() runs them all, so a saved offline copy contains every view already drawn
    (a phone's file preview without JavaScript can still show it). */
 let view="rack",sort="type",query="";
-const TABS=[["rack","Rack","i-rack"],["list","List","i-list"],["shop","Shop","i-shop"],["add","Add","i-add"]];
+const TABS=[["rack","Rack","i-rack"],["list","List","i-list"],["shop","Shop","i-shop"],["add","Add","i-add"],["help","Help","i-help"]];
 const GROUPS=[["top","Tops"],["outer","Hoodies & jackets"],["bottom","Bottoms"],["shoes","Shoes"],["acc","Accessories"],["none","Other"]];
 const svg=id=>`<svg class="i" aria-hidden="true"><use href="#${id}"/></svg>`;
 function pic(i,cls=""){const p=main(i.id);if(p)return `<img class="${cls}" src="${p.isCut===false?p.full:p.cut}" alt="${esc(i.name)}">`;
@@ -786,7 +919,7 @@ function renderShop(){
    <span class="t">${i.url?`<a class="nlink" href="${esc(i.url)}" target="_blank" rel="noopener">${esc((i.brand?i.brand+" ":"")+i.name)}<span aria-hidden="true"> ↗</span></a>`:`<b>${esc((i.brand?i.brand+" ":"")+i.name)}</b>`}<small>${esc([i.colour,i.note&&i.note.match(/confirm[^.]*/i)?.[0]].filter(Boolean).join(" · "))}</small>${i.sizes?`<span class="minis">${sizeChips(i,"mini")}</span>`:""}</span>
    <span class="pr">${priceOf(i)}${d?`<s>was $${(+i.was).toFixed(2)} · −${d}%</s>`:""}<input type="number" min="0" step="0.01" inputmode="decimal" placeholder="Shelf $" aria-label="Shelf price for ${esc(i.name)}" data-instore="${esc(i.id)}" value="${i.inStore||""}">${diff>0?`<span class="save" style="display:block">$${diff.toFixed(2)} cheaper</span>`:diff<0?`<span class="save" style="display:block;color:#dc2626">$${(-diff).toFixed(2)} more</span>`:""}</span></div>`}}
 function render(){renderTabs();renderRack();renderList();renderShop()}
-function go(v){view=v;renderTabs();scrollTo(0,0)}
+function go(v){navTo(v)}
 </script>
 
 <script>
@@ -839,7 +972,7 @@ async function addPhoto(id,make){try{toast("Cutting out the photo…");const p=a
   catch(e){toast(e.message==="blocked"?"That site blocks using its photo by link. Use Copy image, then Paste.":"Couldn't read that image.");return false}}
 async function pasteInto(id){try{const cl=await navigator.clipboard.read();for(const c of cl){const t=c.types.find(x=>x.startsWith("image/"));if(t){const b=await c.getType(t);await addPhoto(id,()=>photoFromBlob(b));if(openId===id&&sheet.open)drawSheet();return}}
     toast("No image on the clipboard. Copy the product photo first.")}catch(e){toast("Press Ctrl+V (⌘V) to paste instead.")}}
-sheet.addEventListener("click",e=>{if(e.target===sheet)sheet.close()});
+sheet.addEventListener("click",e=>{if(e.target!==sheet)return;const b=sheet.getBoundingClientRect();if(e.clientX<b.left||e.clientX>b.right||e.clientY<b.top||e.clientY>b.bottom)sheet.close()});
 sheet.addEventListener("close",()=>{openId=null;sheet.innerHTML=""});
 
 function download(blob,name){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)}
@@ -1154,6 +1287,64 @@ document.getElementById("tokDel").onclick=()=>{try{localStorage.removeItem("sfr_
 </script>
 
 <script>
+/* ===================== NAVIGATION, BACK BUTTON, MOTION =====================
+   Each page change adds an entry to the browser "history", so the phone's back gesture and the ‹ Back button step
+   back through the pages you visited; an open sheet is an entry too, so back closes it first. The very first entry
+   is a guard: going back to it shows "Go back again to close" instead of leaving the app at once. */
+const TITLES={rack:"Rack",list:"List",shop:"Shop",add:"Add",help:"Help"};
+const RM=matchMedia("(prefers-reduced-motion: reduce)");
+let navStack=[],navReady=false,popClosing=false,exitArmed=0;
+const here=v=>location.pathname+location.search+"#"+v;
+function showView(v,anchor){view=v;renderTabs();drawBack();
+  document.querySelectorAll(`[data-v="${v}"]`).forEach(b=>b.classList.add("bounce"));
+  if(anchor){const a=document.getElementById(anchor);if(a)setTimeout(()=>a.scrollIntoView({behavior:RM.matches?"auto":"smooth",block:"start"}),60)}else scrollTo({top:0,behavior:"instant"});
+  onScroll();reveal()}
+function navTo(v,anchor){if(!navReady){view=v;renderTabs();scrollTo(0,0);return}
+  if(v===view&&!anchor){scrollTo({top:0,behavior:RM.matches?"auto":"smooth"});return} // tapping the tab you're on: back to top
+  if(v!==view)navStack.push(view);
+  if(history.state&&history.state.sheet)history.replaceState({v},"",here(v));else history.pushState({v},"",here(v));
+  showView(v,anchor)}
+function drawBack(){const b=document.getElementById("navBack"),prev=navStack[navStack.length-1];
+  b.hidden=!prev;document.getElementById("navBackT").textContent=prev?TITLES[prev]:"Back";b.setAttribute("aria-label",prev?`Back to ${TITLES[prev]}`:"Back");
+  document.querySelector(".top").classList.toggle("hasback",!!prev);document.getElementById("navTitle").textContent=TITLES[view]||""}
+function navInit(){navReady=true;const start=(location.hash||"").slice(1);if(TITLES[start])view=start;
+  history.replaceState({v:view,root:1},"",here(view));history.pushState({v:view},"",here(view));showView(view);
+  document.getElementById("navBack").onclick=()=>history.back();
+  addEventListener("popstate",e=>{const st=e.state||{v:TITLES[(location.hash||"").slice(1)]?location.hash.slice(1):""}; // a typed or bookmarked #page
+    if(sheet.open&&!sheet.classList.contains("closing")){popClosing=true;sheet.close();if(!st.root)return}
+    if(st.root){if(Date.now()-exitArmed<2500){history.back();return}
+      exitArmed=Date.now();toast("Go back again to close");history.pushState({v:view},"",here(view));return}
+    if(st.v&&st.v!==view){if(navStack[navStack.length-1]===st.v)navStack.pop();else navStack.push(view);showView(st.v)}});
+  document.addEventListener("click",e=>{const a=e.target.closest(".toc a,[data-anchor]");if(!a)return;e.preventDefault();e.stopPropagation();
+    const id=a.dataset.anchor||a.getAttribute("href").slice(1);if(view!=="help")navTo("help",id);else{const t=document.getElementById(id);if(t)t.scrollIntoView({behavior:RM.matches?"auto":"smooth",block:"start"})}},true)}
+/* Sheets: opening adds a history entry; closing (✕, tap outside, Esc, swipe) slides it away and removes the entry. */
+(()=>{const show=HTMLDialogElement.prototype.showModal,close=HTMLDialogElement.prototype.close;
+  sheet.showModal=function(){if(this.classList.contains("closing")){clearTimeout(this._ct);this.classList.remove("closing")}if(this.open)return;
+    this.style.transform="";show.call(this);if(navReady&&!(history.state&&history.state.sheet))history.pushState({v:view,sheet:1},"",here(view))};
+  sheet.close=function(){if(!this.open||this.classList.contains("closing"))return;if(RM.matches)return close.call(this);
+    this.classList.add("closing");this._ct=setTimeout(()=>{this.classList.remove("closing");this.style.transform="";close.call(this)},240)};
+  sheet.addEventListener("cancel",e=>{e.preventDefault();sheet.close()});
+  sheet.addEventListener("close",()=>{if(!popClosing&&navReady)setTimeout(()=>{if(history.state&&history.state.sheet)history.back()},0);popClosing=false});
+  // swipe the grey bar down to close (phones)
+  let y0=null,dy=0;
+  sheet.addEventListener("pointerdown",e=>{if(e.target!==sheet||innerWidth>700)return;const r=sheet.getBoundingClientRect();if(e.clientY-r.top>30)return;y0=e.clientY;dy=0;sheet.style.transition="none";try{sheet.setPointerCapture(e.pointerId)}catch(_){}});
+  sheet.addEventListener("pointermove",e=>{if(y0==null)return;dy=Math.max(0,e.clientY-y0);sheet.style.transform=`translateY(${dy}px)`});
+  const end=()=>{if(y0==null)return;y0=null;sheet.style.transition="transform .35s var(--spring)";if(dy>100)sheet.close();else sheet.style.transform="";setTimeout(()=>{sheet.style.transition=""},360)};
+  sheet.addEventListener("pointerup",end);sheet.addEventListener("pointercancel",end)})();
+/* Header: a hairline once you scroll, and the big title moves into the bar once it scrolls away. */
+let scrollRaf=0;
+function onScroll(){cancelAnimationFrame(scrollRaf);scrollRaf=requestAnimationFrame(()=>{const top=document.querySelector(".top"),h1=document.querySelector(".view.on .vhead h1");
+  top.classList.toggle("scrolled",scrollY>4);top.classList.toggle("compact",!!h1&&h1.getBoundingClientRect().bottom<64)})}
+addEventListener("scroll",onScroll,{passive:true});
+/* Sections fade up the first time they scroll into view; once seen they stay put when the page redraws. */
+const seen=new Set();const io="IntersectionObserver" in window?new IntersectionObserver(es=>{for(const e of es)if(e.isIntersecting){e.target.classList.add("in");seen.add(e.target.dataset.rvk);io.unobserve(e.target)}},{rootMargin:"0px 0px -6% 0px"}):null;
+function reveal(){if(!io||RM.matches)return;for(const el of document.querySelectorAll(".view.on :is(.rack,.lgrp,.store,.card,.hcard)")){if(el.classList.contains("rv"))continue;
+  if(el.closest(".rv:not(.in)"))continue;const k=view+":"+(el.id||(el.querySelector("h2,h3")||{}).textContent||el.className);el.dataset.rvk=k;
+  if(seen.has(k))el.classList.add("rv","in","now");else{el.classList.add("rv");io.observe(el)}}}
+const _render=render;render=function(){_render();if(navReady){drawBack();reveal()}};
+</script>
+
+<script>
 /* ===================== WIRING + START ===================== */
 function commit(){save();render()}
 function load(d){if(d.state)S=Object.assign(fresh(),d.state);if(d.photos)for(const [k,v] of Object.entries(d.photos)){PH[k]=v;DB.put(k,v)}}
@@ -1183,7 +1374,7 @@ document.getElementById("lq").addEventListener("input",e=>{lq=e.target.value.tri
   // carry over "bought" ticks from the earlier SirFay page, once
   const old=LS.get("sf_bought",null);if(old&&!S.migrated){for(const id in old){const i=item(id);if(i&&old[id])i.status="bought"}S.migrated=1;save()}
   document.getElementById("readerOpt").checked=!!S.reader;
-  resnap();render();drawDrop();syncStart();
+  resnap();render();drawDrop();navInit();syncStart();
 })();
 </script>
 </body>
