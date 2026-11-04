@@ -1300,41 +1300,46 @@ document.getElementById("tokDel").onclick=()=>{try{localStorage.removeItem("sfr_
 <script>
 /* ===================== NAVIGATION, BACK BUTTON, MOTION =====================
    Works like a phone app with tabs. Rack is home. Back, in this order:
-   1) closes what is open on top (an item, the send-to-helper sheet, the photo bar) and leaves the page exactly
-      where it was; 2) from List, Shop, Add or Help, goes home to Rack; 3) on Rack, asks once more, then leaves.
-   Tapping a main tab opens that page fresh at the top and never piles up back steps.
-   How: the browser "history" always holds just two entries, a guard and the app. A back gesture lands on the guard;
-   we handle it ourselves and put the app entry back, so back can never run away through old pages. */
+   1) closes an open item or sheet and leaves the page exactly where it was; 2) from List, Shop, Add or Help, goes
+   home to Rack; 3) on Rack, warns "Go back again to close", then leaves.
+   Tapping a main tab opens that page fresh at the top; switching between tabs never piles up back steps.
+   How: each back step is a browser "history" entry. Chrome on phones ignores entries a page adds on its own (to stop
+   sites trapping you), so every entry here is added at the moment you tap: opening an item, switching away from
+   Rack, and a "guard" on your first tap on Rack (which is what makes the warning possible). At most three entries
+   exist at once: guard, a tab, an open item. */
 const TITLES={rack:"Rack",list:"List",shop:"Shop",add:"Add",help:"Help"};
 const RM=matchMedia("(prefers-reduced-motion: reduce)");
-let navReady=false,exitArmed=0,sheetScroll=null;
+let navReady=false,sheetScroll=null,closingByBack=false;
 const here=v=>location.pathname+location.search+"#"+v;
+const hst=()=>history.state||{};
 function showView(v,anchor){view=v;renderTabs();drawBack();
-  if(navReady&&history.state&&history.state.app)history.replaceState({app:1},"",here(v)); // the address shows the page, no new back step
   document.querySelectorAll(`[data-v="${v}"]`).forEach(b=>b.classList.add("bounce"));
   if(anchor){const a=document.getElementById(anchor);if(a)setTimeout(()=>a.scrollIntoView({behavior:RM.matches?"auto":"smooth",block:"start"}),60)}else scrollTo({top:0,behavior:"instant"});
   onScroll();reveal()}
 function navTo(v,anchor){if(!navReady){view=v;renderTabs();scrollTo(0,0);return}
   if(v===view&&!anchor){scrollTo({top:0,behavior:RM.matches?"auto":"smooth"});return} // the tab you're on: back to the top
+  const st=hst();
+  if(st.sheet){history.replaceState(v==="rack"?{v:"rack",g:1}:{v,tab:1},"",here(v))}   // leaving an open item for a tab: reuse its step
+  else if(v==="rack"){if(st.tab){history.back();return}}                              // home: step back to the guard (popstate shows Rack)
+  else if(st.tab)history.replaceState({v,tab:1},"",here(v));                          // tab to tab: same step, no pile-up
+  else history.pushState({v,tab:1},"",here(v));                                        // Rack to a tab: one step
   showView(v,anchor)}
-function goBack(){ // returns false when there is nothing left to go back to
-  if(sheet.open&&!sheet.classList.contains("closing")){sheet.close();return true}
-  if(typeof photoTarget!=="undefined"&&photoTarget){endPhoto();return true}
-  if(view!=="rack"){showView("rack");return true}
-  return false}
+function goBack(){if(sheet.open&&!sheet.classList.contains("closing"))return sheet.close(); // ‹ buttons do what the phone's back does
+  if(hst().tab)return history.back();if(view!=="rack")showView("rack")}
 function drawBack(){const b=document.getElementById("navBack"),back=view!=="rack";
   b.hidden=!back;document.getElementById("navBackT").textContent="Rack";b.setAttribute("aria-label","Back to Rack");
   document.querySelector(".top").classList.toggle("hasback",back);document.getElementById("navTitle").textContent=TITLES[view]||""}
-function navInit(){navReady=true;const start=(location.hash||"").slice(1);if(TITLES[start])view=start;
-  history.replaceState({guard:1},"",here(view));history.pushState({app:1},"",here(view));showView(view);
+function navInit(){navReady=true;const start=(location.hash||"").slice(1);
+  history.replaceState({v:"rack",base:1},"",here("rack"));
+  showView(TITLES[start]&&start!=="rack"?start:"rack");
   document.getElementById("navBack").onclick=()=>goBack();
-  addEventListener("popstate",e=>{
-    if(e.state&&e.state.app)return; // "forward" back onto the app entry: nothing to do
-    const typed=(location.hash||"").slice(1);
-    if(!e.state&&TITLES[typed]){history.replaceState({app:1},"",here(typed));showView(typed);return} // a typed or bookmarked #page
-    if(goBack()){history.pushState({app:1},"",here(view));return}
-    if(Date.now()-exitArmed<2500){history.back();return} // second back on Rack: leave
-    exitArmed=Date.now();toast("Go back again to close");history.pushState({app:1},"",here(view))});
+  // First tap anywhere (while nothing else is stacked): add the guard step, so a back on Rack warns before leaving.
+  addEventListener("click",()=>{if(hst().base)history.pushState({v:"rack",g:1},"",here("rack"))},true);
+  addEventListener("popstate",e=>{const st=e.state||{v:TITLES[(location.hash||"").slice(1)]?location.hash.slice(1):"rack"};
+    if(sheet.open&&!st.sheet){closingByBack=true;sheet.close()}                     // back closed the item: page stays put
+    if(st.sheet)return;
+    const v=st.v||"rack",was=view;if(v!==view)showView(v);
+    if(st.base&&was==="rack")toast("Go back again to close")});
   document.addEventListener("click",e=>{const a=e.target.closest(".toc a,[data-anchor]");if(!a)return;e.preventDefault();e.stopPropagation();
     const id=a.dataset.anchor||a.getAttribute("href").slice(1);if(view!=="help")navTo("help",id);else{const t=document.getElementById(id);if(t)t.scrollIntoView({behavior:RM.matches?"auto":"smooth",block:"start"})}},true)}
 /* The bar on top of every sheet: ‹ Back (phones) and ✕. Always solid, so it shows over any photo. */
@@ -1343,11 +1348,12 @@ function sheetBar(){return `<div class="shbar"><button type="button" class="shba
    at the same scroll position it had when the sheet opened. */
 (()=>{const show=HTMLDialogElement.prototype.showModal,close=HTMLDialogElement.prototype.close;
   sheet.showModal=function(){if(this.classList.contains("closing")){clearTimeout(this._ct);this.classList.remove("closing")}if(this.open)return;
-    sheetScroll=scrollY;this.style.transform="";show.call(this)};
+    sheetScroll=scrollY;this.style.transform="";show.call(this);if(navReady&&!hst().sheet)history.pushState({...hst(),base:undefined,sheet:1},"",location.href)};
   sheet.close=function(){if(!this.open||this.classList.contains("closing"))return;if(RM.matches)return close.call(this);
     this.classList.add("closing");this._ct=setTimeout(()=>{this.classList.remove("closing");this.style.transform="";close.call(this)},240)};
   sheet.addEventListener("cancel",e=>{e.preventDefault();sheet.close()});
-  sheet.addEventListener("close",()=>{const y=sheetScroll;sheetScroll=null;if(y!=null&&Math.abs(scrollY-y)>2)requestAnimationFrame(()=>scrollTo({top:y,behavior:"instant"}))});
+  sheet.addEventListener("close",()=>{const y=sheetScroll;sheetScroll=null;if(y!=null&&Math.abs(scrollY-y)>2)requestAnimationFrame(()=>scrollTo({top:y,behavior:"instant"}));
+    if(!closingByBack&&navReady)setTimeout(()=>{if(hst().sheet)history.back()},0);closingByBack=false});
   sheet.addEventListener("click",e=>{if(e.target.closest("#shback"))sheet.close()});
   // swipe the bar at the top down to close (phones)
   let y0=null,dy=0;
