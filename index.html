@@ -234,13 +234,24 @@ dialog.sheet[open]::backdrop{animation:bdIn .4s var(--ease)}
 @media(max-width:700px){.zoomwrap{height:58vh;min-height:0}}
 .zoom.z{cursor:grab}
 .zoom img{max-width:100%;max-height:100%;object-fit:contain;transform-origin:center;transition:transform .3s var(--ease);will-change:transform}
+.zoom .sil{margin:0 auto}
 .zoom.drag img{transition:none}
 .zhint{position:absolute;left:12px;bottom:12px;font-size:12px;background:var(--glass);border-radius:999px;padding:5px 11px;pointer-events:none}
 .thumbs{position:absolute;right:12px;bottom:12px;display:flex;gap:6px}
 .thumbs button{width:44px;height:44px;border-radius:10px;border:2px solid transparent;padding:0;background:var(--surf);overflow:hidden;cursor:pointer}
 .thumbs button[aria-pressed=true]{border-color:var(--icon)}
 .thumbs img{width:100%;height:100%;object-fit:cover}
-.shx{position:absolute;top:12px;right:12px;z-index:3;border:0;background:var(--glass);backdrop-filter:blur(10px);width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:15px}
+.shbar{position:absolute;top:12px;right:12px;z-index:6;display:flex;align-items:center;gap:8px;pointer-events:none}
+.shbar>*{pointer-events:auto}
+.shx{border:0;background:var(--surf);box-shadow:0 1px 4px rgba(0,0,0,.18);width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:15px;color:var(--text);flex:none}
+.shback,.grab{display:none}
+.shback svg{width:22px;height:22px;stroke:var(--icon);stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round}
+@media(max-width:700px){
+  .shbar{position:sticky;top:0;left:auto;right:auto;grid-column:1/-1;justify-content:space-between;padding:10px 12px;margin:0;background:var(--glass);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--line);touch-action:none}
+  .sendsheet .shbar{margin:-26px -26px 14px}
+  .shback{display:inline-flex;align-items:center;gap:1px;border:0;background:none;padding:6px 8px 6px 0;font-size:17px;color:var(--text);cursor:pointer;border-radius:10px}
+  .grab{display:block;width:40px;height:5px;border-radius:9px;background:var(--faint);opacity:.7}
+  .shx{background:var(--alt);box-shadow:none}}
 .info{padding:26px;overflow:auto}
 .info .br{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .info h2{font-size:28px;line-height:1.12;letter-spacing:-.028em;margin:4px 0 10px;font-weight:700}
@@ -309,8 +320,8 @@ footer{color:var(--muted);font-size:13px;text-align:center;padding:50px 20px 30p
    asks for reduced motion. */
 :root{--spring:cubic-bezier(.32,.72,0,1)}
 html{scroll-behavior:smooth}
-.btn,.seg button,.tabs button,.tabbar button,.chip,.chk,.linkbtn,.navback,.shx,.thumb,.pk{transition:transform .4s var(--spring),background-color .25s var(--ease),color .25s var(--ease),opacity .25s var(--ease),box-shadow .25s var(--ease)}
-.btn:active,.seg button:active,.tabs button:active,.tabbar button:active,.chip:active,.chk:active,.navback:active,.shx:active,.thumb:active{transform:scale(.94);transition-duration:.1s}
+.btn,.seg button,.tabs button,.tabbar button,.chip,.chk,.linkbtn,.navback,.shx,.shback,.thumb,.pk{transition:transform .4s var(--spring),background-color .25s var(--ease),color .25s var(--ease),opacity .25s var(--ease),box-shadow .25s var(--ease)}
+.btn:active,.seg button:active,.tabs button:active,.tabbar button:active,.chip:active,.chk:active,.navback:active,.shx:active,.shback:active,.thumb:active{transform:scale(.94);transition-duration:.1s}
 .piece:active .ph{transform:scale(.97);transition-duration:.12s}
 .tabbar button svg,.tabs button svg{transition:transform .4s var(--spring)}
 .bounce svg{animation:bounce .6s var(--spring)}
@@ -340,7 +351,7 @@ html{scroll-behavior:smooth}
 /* sheets on phones: a grab bar to swipe down */
 @media(max-width:700px){dialog.sheet[open]{animation:sheetUp .55s var(--spring)}@keyframes sheetUp{from{transform:translateY(100%)}to{transform:none}}
   dialog.sheet.closing{animation:sheetDown .26s var(--ease) forwards}@keyframes sheetDown{to{transform:translateY(100%)}}
-  dialog.sheet:before{content:"";position:absolute;top:0;left:0;right:0;height:26px;z-index:5;background:radial-gradient(closest-side,var(--faint) 98%,transparent) 50% 9px/40px 5px no-repeat;touch-action:none}}
+}
 /* ---------- HELP ---------- */
 .chip{border:1px solid var(--line);background:var(--surf);border-radius:999px;padding:7px 13px;font-size:14px;cursor:pointer;text-decoration:none;color:var(--text)}
 .toc{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px}
@@ -489,9 +500,9 @@ code.k{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;ba
       <p>Store links need internet to open. Everything else works offline.</p></div>
     <div class="card" id="h-move"><h3>Getting around</h3><ol class="steps">
       <li>Use the tabs at the bottom (at the top on a computer). Tap the tab you're on to jump back to the top.</li>
-      <li><b>Back</b> takes you to the page you were on: the <b>‹ Back</b> button at the top left, your phone's back gesture or back button. Open details close first.</li>
-      <li>On the first page, going back shows "Go back again to close", so the app doesn't close by accident.</li>
-      <li>Details slide up from the bottom: swipe the grey bar down, tap outside, or tap ✕ to close.</li></ol></div>
+      <li><b>Back</b> (your phone's back gesture, or <b>‹ Back</b> at the top) works like any app with tabs: first it closes an open item and leaves the page just as it was; from List, Shop, Add or Help it goes home to <b>Rack</b>; on Rack it asks once more before closing.</li>
+      <li>Tapping a main tab opens that page fresh at the top. Switching tabs never piles up back steps.</li>
+      <li>Items open as a card from the bottom with <b>‹ Back</b> and <b>✕</b> at the top. Swipe that top bar down, tap outside, or tap either button to close.</li></ol></div>
     <div class="card" id="h-add"><h3>Adding items</h3><ol class="steps">
       <li>Go to <b>Add</b> and paste a product link, then <b>Get details</b>. The app fills in what it can: name, brand, store, price, discount, sizes, material, where it's from.</li>
       <li>Some stores block apps. Then open <b>No details came through? Paste the product page</b>: on the store page select all and copy, paste it in, tap <b>Read it</b>.</li>
@@ -929,10 +940,10 @@ function go(v){navTo(v)}
 const sheet=document.getElementById("sheet");let openId=null,photoIx=0;
 function openItem(id){openId=id;photoIx=0;drawSheet();if(!sheet.open)sheet.showModal()}
 function drawSheet(){const i=item(openId);if(!i)return;const ps=PH[i.id]||[],p=ps[photoIx],d=pct(i);
-  sheet.innerHTML=`<div class="sh"><div class="zoomwrap"><div class="zoom" id="zoom">${p?`<img src="${p.full}" alt="${esc(i.name)}, full photo">`:`<div style="text-align:center;color:var(--muted);padding:30px">${pic(i)}<p style="font-size:14px;margin-top:16px">No photo yet. Copy the product photo on the store page,<br>then press Paste photo below (or Ctrl+V).</p></div>`}</div>
+  sheet.innerHTML=`<div class="sh">${sheetBar()}<div class="zoomwrap"><div class="zoom" id="zoom">${p?`<img src="${p.full}" alt="${esc(i.name)}, full photo">`:`<div style="text-align:center;color:var(--muted);padding:30px">${pic(i)}<p style="font-size:14px;margin-top:16px">No photo yet. Copy the product photo on the store page,<br>then press Paste photo below (or Ctrl+V).</p></div>`}</div>
     ${p?'<span class="zhint">Double-tap or pinch to see the fabric</span>':""}
     ${ps.length>1?`<div class="thumbs">${ps.map((x,k)=>`<button type="button" data-ph="${k}" aria-pressed="${k===photoIx}" aria-label="Photo ${k+1}"><img src="${x.cut}" alt=""></button>`).join("")}</div>`:""}</div>
-   <div class="info"><button type="button" class="shx" id="shx" aria-label="Close">✕</button>
+   <div class="info">
     <div class="br">${esc(i.brand||i.store)}</div><h2>${esc(i.name)}</h2>
     <div class="price"><b>${priceOf(i)}</b>${i.was&&d?`<s>$${(+i.was).toFixed(2)}</s><span class="off">−${d}%</span>`:""}</div>${buyLine(i)?`<p class="buy"><b>Buy:</b> ${esc(buyLine(i))}</p>`:""}
     ${i.sizes?`<div class="szs" aria-label="Sizes available">${sizeChips(i,"")}</div>`:""}
@@ -1106,7 +1117,7 @@ function buildCopy(data,helperView){
   return "<!doctype html>\n"+root.outerHTML}
 function openSend(){const d=Object.assign({helper:"",me:"",msg:"",budget:""},S.send||{}),cand=S.items.filter(i=>i.status!=="parked");
   const sel=new Set((d.ids||[]).filter(id=>item(id)));if(!sel.size)cand.filter(i=>i.status!=="bought").forEach(i=>sel.add(i.id));
-  sheet.innerHTML=`<div class="info sendsheet"><button type="button" class="shx" id="shx" aria-label="Close">✕</button>
+  sheet.innerHTML=`<div class="info sendsheet">${sheetBar()}
    <div class="br">Send to a helper</div><h2>Who's doing the shopping?</h2>
    <form id="sendF" class="f" style="margin-top:4px" onsubmit="return false">
     <label class="fld">Their name<input name="helper" value="${esc(d.helper)}" placeholder="e.g. Ada"></label>
@@ -1288,46 +1299,59 @@ document.getElementById("tokDel").onclick=()=>{try{localStorage.removeItem("sfr_
 
 <script>
 /* ===================== NAVIGATION, BACK BUTTON, MOTION =====================
-   Each page change adds an entry to the browser "history", so the phone's back gesture and the ‹ Back button step
-   back through the pages you visited; an open sheet is an entry too, so back closes it first. The very first entry
-   is a guard: going back to it shows "Go back again to close" instead of leaving the app at once. */
+   Works like a phone app with tabs. Rack is home. Back, in this order:
+   1) closes what is open on top (an item, the send-to-helper sheet, the photo bar) and leaves the page exactly
+      where it was; 2) from List, Shop, Add or Help, goes home to Rack; 3) on Rack, asks once more, then leaves.
+   Tapping a main tab opens that page fresh at the top and never piles up back steps.
+   How: the browser "history" always holds just two entries, a guard and the app. A back gesture lands on the guard;
+   we handle it ourselves and put the app entry back, so back can never run away through old pages. */
 const TITLES={rack:"Rack",list:"List",shop:"Shop",add:"Add",help:"Help"};
 const RM=matchMedia("(prefers-reduced-motion: reduce)");
-let navStack=[],navReady=false,popClosing=false,exitArmed=0;
+let navReady=false,exitArmed=0,sheetScroll=null;
 const here=v=>location.pathname+location.search+"#"+v;
 function showView(v,anchor){view=v;renderTabs();drawBack();
+  if(navReady&&history.state&&history.state.app)history.replaceState({app:1},"",here(v)); // the address shows the page, no new back step
   document.querySelectorAll(`[data-v="${v}"]`).forEach(b=>b.classList.add("bounce"));
   if(anchor){const a=document.getElementById(anchor);if(a)setTimeout(()=>a.scrollIntoView({behavior:RM.matches?"auto":"smooth",block:"start"}),60)}else scrollTo({top:0,behavior:"instant"});
   onScroll();reveal()}
 function navTo(v,anchor){if(!navReady){view=v;renderTabs();scrollTo(0,0);return}
-  if(v===view&&!anchor){scrollTo({top:0,behavior:RM.matches?"auto":"smooth"});return} // tapping the tab you're on: back to top
-  if(v!==view)navStack.push(view);
-  if(history.state&&history.state.sheet)history.replaceState({v},"",here(v));else history.pushState({v},"",here(v));
+  if(v===view&&!anchor){scrollTo({top:0,behavior:RM.matches?"auto":"smooth"});return} // the tab you're on: back to the top
   showView(v,anchor)}
-function drawBack(){const b=document.getElementById("navBack"),prev=navStack[navStack.length-1];
-  b.hidden=!prev;document.getElementById("navBackT").textContent=prev?TITLES[prev]:"Back";b.setAttribute("aria-label",prev?`Back to ${TITLES[prev]}`:"Back");
-  document.querySelector(".top").classList.toggle("hasback",!!prev);document.getElementById("navTitle").textContent=TITLES[view]||""}
+function goBack(){ // returns false when there is nothing left to go back to
+  if(sheet.open&&!sheet.classList.contains("closing")){sheet.close();return true}
+  if(typeof photoTarget!=="undefined"&&photoTarget){endPhoto();return true}
+  if(view!=="rack"){showView("rack");return true}
+  return false}
+function drawBack(){const b=document.getElementById("navBack"),back=view!=="rack";
+  b.hidden=!back;document.getElementById("navBackT").textContent="Rack";b.setAttribute("aria-label","Back to Rack");
+  document.querySelector(".top").classList.toggle("hasback",back);document.getElementById("navTitle").textContent=TITLES[view]||""}
 function navInit(){navReady=true;const start=(location.hash||"").slice(1);if(TITLES[start])view=start;
-  history.replaceState({v:view,root:1},"",here(view));history.pushState({v:view},"",here(view));showView(view);
-  document.getElementById("navBack").onclick=()=>history.back();
-  addEventListener("popstate",e=>{const st=e.state||{v:TITLES[(location.hash||"").slice(1)]?location.hash.slice(1):""}; // a typed or bookmarked #page
-    if(sheet.open&&!sheet.classList.contains("closing")){popClosing=true;sheet.close();if(!st.root)return}
-    if(st.root){if(Date.now()-exitArmed<2500){history.back();return}
-      exitArmed=Date.now();toast("Go back again to close");history.pushState({v:view},"",here(view));return}
-    if(st.v&&st.v!==view){if(navStack[navStack.length-1]===st.v)navStack.pop();else navStack.push(view);showView(st.v)}});
+  history.replaceState({guard:1},"",here(view));history.pushState({app:1},"",here(view));showView(view);
+  document.getElementById("navBack").onclick=()=>goBack();
+  addEventListener("popstate",e=>{
+    if(e.state&&e.state.app)return; // "forward" back onto the app entry: nothing to do
+    const typed=(location.hash||"").slice(1);
+    if(!e.state&&TITLES[typed]){history.replaceState({app:1},"",here(typed));showView(typed);return} // a typed or bookmarked #page
+    if(goBack()){history.pushState({app:1},"",here(view));return}
+    if(Date.now()-exitArmed<2500){history.back();return} // second back on Rack: leave
+    exitArmed=Date.now();toast("Go back again to close");history.pushState({app:1},"",here(view))});
   document.addEventListener("click",e=>{const a=e.target.closest(".toc a,[data-anchor]");if(!a)return;e.preventDefault();e.stopPropagation();
     const id=a.dataset.anchor||a.getAttribute("href").slice(1);if(view!=="help")navTo("help",id);else{const t=document.getElementById(id);if(t)t.scrollIntoView({behavior:RM.matches?"auto":"smooth",block:"start"})}},true)}
-/* Sheets: opening adds a history entry; closing (✕, tap outside, Esc, swipe) slides it away and removes the entry. */
+/* The bar on top of every sheet: ‹ Back (phones) and ✕. Always solid, so it shows over any photo. */
+function sheetBar(){return `<div class="shbar"><button type="button" class="shback" id="shback" aria-label="Back to ${TITLES[view]||"the page"}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>${TITLES[view]||"Back"}</button><span class="grab" aria-hidden="true"></span><button type="button" class="shx" id="shx" aria-label="Close">✕</button></div>`}
+/* Sheets slide away when closed (✕, ‹ Back, tap outside, Esc, swipe down, phone back) and the page underneath is left
+   at the same scroll position it had when the sheet opened. */
 (()=>{const show=HTMLDialogElement.prototype.showModal,close=HTMLDialogElement.prototype.close;
   sheet.showModal=function(){if(this.classList.contains("closing")){clearTimeout(this._ct);this.classList.remove("closing")}if(this.open)return;
-    this.style.transform="";show.call(this);if(navReady&&!(history.state&&history.state.sheet))history.pushState({v:view,sheet:1},"",here(view))};
+    sheetScroll=scrollY;this.style.transform="";show.call(this)};
   sheet.close=function(){if(!this.open||this.classList.contains("closing"))return;if(RM.matches)return close.call(this);
     this.classList.add("closing");this._ct=setTimeout(()=>{this.classList.remove("closing");this.style.transform="";close.call(this)},240)};
   sheet.addEventListener("cancel",e=>{e.preventDefault();sheet.close()});
-  sheet.addEventListener("close",()=>{if(!popClosing&&navReady)setTimeout(()=>{if(history.state&&history.state.sheet)history.back()},0);popClosing=false});
-  // swipe the grey bar down to close (phones)
+  sheet.addEventListener("close",()=>{const y=sheetScroll;sheetScroll=null;if(y!=null&&Math.abs(scrollY-y)>2)requestAnimationFrame(()=>scrollTo({top:y,behavior:"instant"}))});
+  sheet.addEventListener("click",e=>{if(e.target.closest("#shback"))sheet.close()});
+  // swipe the bar at the top down to close (phones)
   let y0=null,dy=0;
-  sheet.addEventListener("pointerdown",e=>{if(e.target!==sheet||innerWidth>700)return;const r=sheet.getBoundingClientRect();if(e.clientY-r.top>30)return;y0=e.clientY;dy=0;sheet.style.transition="none";try{sheet.setPointerCapture(e.pointerId)}catch(_){}});
+  sheet.addEventListener("pointerdown",e=>{if(innerWidth>700||!e.target.closest(".shbar")||e.target.closest("button"))return;y0=e.clientY;dy=0;sheet.style.transition="none";try{sheet.setPointerCapture(e.pointerId)}catch(_){}});
   sheet.addEventListener("pointermove",e=>{if(y0==null)return;dy=Math.max(0,e.clientY-y0);sheet.style.transform=`translateY(${dy}px)`});
   const end=()=>{if(y0==null)return;y0=null;sheet.style.transition="transform .35s var(--spring)";if(dy>100)sheet.close();else sheet.style.transform="";setTimeout(()=>{sheet.style.transition=""},360)};
   sheet.addEventListener("pointerup",end);sheet.addEventListener("pointercancel",end)})();
