@@ -7,7 +7,7 @@ and Add (add by link, photos, backup). Data: items live in localStorage, photos 
 "Save offline copy" writes a new .html file with every item AND every photo baked into it (photos become "data URLs": the
 image bytes written as text), so the file can be sent to a phone and opened with no connection.
 Comments explain why; terms are explained the first time they appear.
-SAFETY (T-026): the <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-fDkok14Mj9TEsY5Wt3Jj5PJwkZcBGkKYFJ8N7TOYbqI=' 'sha256-Y1A3J1p/6FSx5HhkPC4Kam5U6LaS3xqTG93gXkHI+6Q=' 'sha256-BLOgXGgzXMX/UDC7Vy7pSLaq7r/8EkS0dQenietmFYU=' 'sha256-VWS4+7R3COxzom7Kwj1y2EGeSCxcymZT9JJ5h6+oX6g=' 'sha256-s7dq7lI8co4enR01JOqIoF6YH5/9PX4oKJ9ZtUnuCrw=' 'sha256-vquT2FLBpoFnIhEDM499STIYwXV2sOoFLUpYfuxIDlU=' 'sha256-t9noPYClW+py8EVzPrzOy7tIBe4ZdJ2DZVKIcjn2ZDw=' 'sha256-iRlspD4gThxxOZvXY6Og9P8kj4X2+iMv0FpHoVWfzHk=' 'sha256-3f9bH8PSgXz9ttGrsUEX7RlFAVosgImeNWRZe3eCzd8=' 'sha256-+Av7yBtu6+Moedanjc4CNQWEJGEie+QL/n0Sz1aC6Os=' 'sha256-R8+wFfx8R0STryCExF0cNtL1TwR58wEtkWdAXM6iBTc='; worker-src 'self'; style-src 'sha256-+n1joF7Enz0SHnjtsbYl02SdbYOvQrw2DdcIfT+4DoQ='; style-src-attr 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://api.github.com https://r.jina.ai; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'"> tag in <head> is a rule list the browser enforces: only the
+SAFETY (T-026): the Content-Security-Policy meta tag near the top of the head is a rule list the browser enforces: only the
 inline scripts listed by fingerprint (hash) may run. After editing any script or style block, run
 `node scripts/update-csp.mjs` to refresh the fingerprints, or the page will stop working. The "SAFETY CHECKS" block in the
 first script rejects bad photo addresses, links and fields that arrive from outside (imports, repo files, helper copies).
@@ -15,6 +15,7 @@ first script rejects bad photo addresses, links and fields that arrive from outs
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-fDkok14Mj9TEsY5Wt3Jj5PJwkZcBGkKYFJ8N7TOYbqI=' 'sha256-Y1A3J1p/6FSx5HhkPC4Kam5U6LaS3xqTG93gXkHI+6Q=' 'sha256-BLOgXGgzXMX/UDC7Vy7pSLaq7r/8EkS0dQenietmFYU=' 'sha256-VWS4+7R3COxzom7Kwj1y2EGeSCxcymZT9JJ5h6+oX6g=' 'sha256-s7dq7lI8co4enR01JOqIoF6YH5/9PX4oKJ9ZtUnuCrw=' 'sha256-vquT2FLBpoFnIhEDM499STIYwXV2sOoFLUpYfuxIDlU=' 'sha256-t9noPYClW+py8EVzPrzOy7tIBe4ZdJ2DZVKIcjn2ZDw=' 'sha256-iRlspD4gThxxOZvXY6Og9P8kj4X2+iMv0FpHoVWfzHk=' 'sha256-3f9bH8PSgXz9ttGrsUEX7RlFAVosgImeNWRZe3eCzd8=' 'sha256-+Av7yBtu6+Moedanjc4CNQWEJGEie+QL/n0Sz1aC6Os=' 'sha256-R8+wFfx8R0STryCExF0cNtL1TwR58wEtkWdAXM6iBTc='; worker-src 'self'; style-src 'sha256-+n1joF7Enz0SHnjtsbYl02SdbYOvQrw2DdcIfT+4DoQ='; style-src-attr 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://api.github.com https://r.jina.ai; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fafaf9" media="(prefers-color-scheme: light)">
