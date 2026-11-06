@@ -7,6 +7,10 @@ and Add (add by link, photos, backup). Data: items live in localStorage, photos 
 "Save offline copy" writes a new .html file with every item AND every photo baked into it (photos become "data URLs": the
 image bytes written as text), so the file can be sent to a phone and opened with no connection.
 Comments explain why; terms are explained the first time they appear.
+SAFETY (T-026): the <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-fDkok14Mj9TEsY5Wt3Jj5PJwkZcBGkKYFJ8N7TOYbqI=' 'sha256-Y1A3J1p/6FSx5HhkPC4Kam5U6LaS3xqTG93gXkHI+6Q=' 'sha256-BLOgXGgzXMX/UDC7Vy7pSLaq7r/8EkS0dQenietmFYU=' 'sha256-VWS4+7R3COxzom7Kwj1y2EGeSCxcymZT9JJ5h6+oX6g=' 'sha256-s7dq7lI8co4enR01JOqIoF6YH5/9PX4oKJ9ZtUnuCrw=' 'sha256-vquT2FLBpoFnIhEDM499STIYwXV2sOoFLUpYfuxIDlU=' 'sha256-t9noPYClW+py8EVzPrzOy7tIBe4ZdJ2DZVKIcjn2ZDw=' 'sha256-iRlspD4gThxxOZvXY6Og9P8kj4X2+iMv0FpHoVWfzHk=' 'sha256-3f9bH8PSgXz9ttGrsUEX7RlFAVosgImeNWRZe3eCzd8=' 'sha256-+Av7yBtu6+Moedanjc4CNQWEJGEie+QL/n0Sz1aC6Os=' 'sha256-R8+wFfx8R0STryCExF0cNtL1TwR58wEtkWdAXM6iBTc='; worker-src 'self'; style-src 'sha256-+n1joF7Enz0SHnjtsbYl02SdbYOvQrw2DdcIfT+4DoQ='; style-src-attr 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://api.github.com https://r.jina.ai; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'"> tag in <head> is a rule list the browser enforces: only the
+inline scripts listed by fingerprint (hash) may run. After editing any script or style block, run
+`node scripts/update-csp.mjs` to refresh the fingerprints, or the page will stop working. The "SAFETY CHECKS" block in the
+first script rejects bad photo addresses, links and fields that arrive from outside (imports, repo files, helper copies).
 -->
 <html lang="en">
 <head>
@@ -749,6 +753,56 @@ function save(){const n=typeof stamp==="function"?stamp():0;if(n)S.dirty=true;S.
 function saveQuiet(){S.savedAt=Date.now();LS.set("sfr_state",S)} // for merges: not a change made on this phone
 const item=id=>S.items.find(i=>i.id===id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+/* ===================== SAFETY CHECKS (T-026) =====================
+   Everything that arrives from outside this phone (the repo's data.json and photos/*.json, a backup file, a helper's
+   update file, a saved copy) is untrusted: someone could hand-edit it. Text is already made safe by esc(), but a
+   photo address or a link goes into an attribute (src="..." / href="..."), where a stray quote could start running
+   code. So each outside value is checked against a strict pattern first and dropped if it does not match.
+   - A photo must be a data:image/...;base64,... string (this app only ever makes those). Nothing else may be a photo.
+   - A link must start with http:// or https:// (so javascript: and data: links are refused).
+   - Every other field is kept only if it is a known name, the right type and a sane length. Unknown fields are dropped. */
+const IMG_OK=/^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+\/]+={0,2}$/;
+const okImg=v=>typeof v==="string"&&v.length<=8e6&&IMG_OK.test(v);
+const imgSrc=v=>okImg(v)?v:"";                       // use inside src="..." : a bad value becomes an empty address
+function safeUrl(v){if(typeof v!=="string")return "";v=v.trim();if(!v||v.length>2000)return "";
+  try{const u=new URL(v);return u.protocol==="https:"||u.protocol==="http:"?v:""}catch(e){return ""}}
+const hexOk=v=>typeof v==="string"&&/^#[0-9a-f]{3,8}$/i.test(v)?v:"#a8a29e";   // colours go into a style attribute
+const isObj=v=>!!v&&typeof v==="object"&&!Array.isArray(v);
+const ITEM_TEXT={name:200,brand:100,colour:80,store:100,from:80,made:80,material:200,sizes:200,note:2000,buySize:80,tag:60,say:400};
+const ITEM_NUM={price:1e5,was:1e5,inStore:1e5,maxPrice:1e5,qty:1000,u:1e14};
+const ITEM_ENUM={status:["want","bought","parked"],slot:["top","outer","bottom","shoes","acc","none"],priority:["","must","nice"],subs:["","yes","no"]};
+// Rebuilds one item from its known fields only (in the original order). Returns null if it has no usable id.
+function cleanItem(i){if(!isObj(i)||typeof i.id!=="string"||!/^[\w.-]{1,60}$/.test(i.id))return null;const o={};
+  for(const k of Object.keys(i)){const v=i[k];
+    if(k==="id")o.id=v;
+    else if(k in ITEM_TEXT)o[k]=typeof v==="string"?v.slice(0,ITEM_TEXT[k]):"";
+    else if(k in ITEM_NUM){const n=+v;o[k]=isFinite(n)&&n>=0&&n<=ITEM_NUM[k]?n:0}
+    else if(k in ITEM_ENUM)o[k]=ITEM_ENUM[k].includes(v)?v:ITEM_ENUM[k][0];
+    else if(k==="url")o.url=safeUrl(v);
+    else if(k==="color")o.color=hexOk(v);
+    else if(k==="custom")o.custom=v?1:0}
+  return o}
+const cleanItems=a=>Array.isArray(a)?a.slice(0,1000).map(cleanItem).filter(Boolean):[];
+function cleanPhoto(p){if(!isObj(p))return null;const cut=okImg(p.cut)?p.cut:p.full,full=okImg(p.full)?p.full:p.cut;
+  if(!okImg(cut)||!okImg(full))return null;return {cut,full,color:hexOk(p.color),isCut:p.isCut!==false}}
+const cleanPhotos=l=>Array.isArray(l)?l.slice(0,12).map(cleanPhoto).filter(Boolean):[];
+const cleanStamps=o=>{const r={};if(isObj(o))for(const k of Object.keys(o).slice(0,2000))if(/^[\w.-]{1,60}$/.test(k)&&Number.isFinite(+o[k])&&Math.abs(+o[k])<=1e14)r[k]=+o[k];return r};
+const cleanStr=(v,n)=>typeof v==="string"?v.slice(0,n):"";
+// Rebuilds a whole saved state (from a backup file) from known fields only.
+function cleanState(s){if(!isObj(s))return {};const o={};
+  if("items" in s)o.items=cleanItems(s.items);
+  if("budget" in s){const b=+s.budget;o.budget=isFinite(b)&&b>=0&&b<=1e7?b:0}
+  if("reader" in s)o.reader=!!s.reader;
+  if("savedAt" in s){const t=+s.savedAt;o.savedAt=isFinite(t)&&t>=0&&t<=1e14?t:0}
+  if("deleted" in s)o.deleted=cleanStamps(s.deleted);
+  if("photoV" in s)o.photoV=cleanStamps(s.photoV);
+  if("imported" in s)o.imported=Array.isArray(s.imported)?s.imported.filter(n=>Number.isFinite(n)).slice(-500):[];
+  if(isObj(s.send)){const d=s.send;o.send={helper:cleanStr(d.helper,80),me:cleanStr(d.me,80),msg:cleanStr(d.msg,1000),budget:cleanStr(d.budget,20),
+    ids:Array.isArray(d.ids)?d.ids.filter(x=>typeof x==="string"&&/^[\w.-]{1,60}$/.test(x)).slice(0,1000):[]}}
+  if(isObj(s.helperIds)){o.helperIds={};for(const k of Object.keys(s.helperIds).slice(0,200))if(typeof s.helperIds[k]==="string"&&/^[\w-]{1,40}$/.test(s.helperIds[k]))o.helperIds[k.slice(0,80)]=s.helperIds[k]}
+  if(s.migrated)o.migrated=1;
+  return o}
+function cleanPhotoMap(m){const r={};if(isObj(m))for(const k of Object.keys(m).slice(0,1000)){if(!/^[\w.-]{1,60}$/.test(k))continue;const l=cleanPhotos(m[k]);if(l.length)r[k]=l}return r}
 const money=n=>(n||n===0)&&+n>0?"$"+(+n).toFixed(2):"Hunt price";
 const pct=i=>i.was&&i.price&&+i.was>+i.price?Math.round((1-i.price/i.was)*100):0;
 const paid=i=>+(i.inStore||i.price||0);
@@ -876,8 +930,8 @@ let view="rack",sort="type",query="";
 const TABS=[["rack","Rack","i-rack"],["list","List","i-list"],["shop","Shop","i-shop"],["add","Add","i-add"],["help","Help","i-help"]];
 const GROUPS=[["top","Tops"],["outer","Hoodies & jackets"],["bottom","Bottoms"],["shoes","Shoes"],["acc","Accessories"],["none","Other"]];
 const svg=id=>`<svg class="i" aria-hidden="true"><use href="#${id}"/></svg>`;
-function pic(i,cls=""){const p=main(i.id);if(p)return `<img class="${cls}" src="${p.isCut===false?p.full:p.cut}" alt="${esc(i.name)}">`;
-  return `<div class="sil ${shapeOf(i)} f-${fabricOf(i)}" style="--c:${esc(i.color||"#a8a29e")}" role="img" aria-label="${esc(i.name)}, no photo yet"></div>`}
+function pic(i,cls=""){const p=main(i.id);if(p)return `<img class="${cls}" src="${imgSrc(p.isCut===false?p.full:p.cut)}" alt="${esc(i.name)}">`;
+  return `<div class="sil ${shapeOf(i)} f-${fabricOf(i)}" style="--c:${hexOk(i.color)}" role="img" aria-label="${esc(i.name)}, no photo yet"></div>`}
 function sizeChips(i,cls){const s=(i.sizes||"").split(/\s*,\s*/).filter(Boolean);return s.map(z=>`<span class="${cls}${HIS.test(z.trim())?" his":""}">${esc(z)}</span>`).join("")}
 function renderTabs(){const h=TABS.map(([k,l,ic])=>`<button role="tab" type="button" data-v="${k}" aria-selected="${view===k}">${svg(ic)}<span>${l}</span></button>`).join("");
   document.getElementById("tabsTop").innerHTML=h;document.getElementById("tabsBottom").innerHTML=h;
@@ -911,7 +965,7 @@ function renderList(){
   const row=i=>{const d=pct(i);return `<div class="lrow${i.status==="bought"?" done":""}${i.status==="parked"?" parked":""}">
     <button type="button" class="chk" data-buy="${esc(i.id)}" aria-pressed="${i.status==="bought"}" aria-label="Bought: ${esc(i.name)}">${i.status==="bought"?"✓":""}</button>
     <button type="button" class="thumb" data-id="${esc(i.id)}" aria-label="Details for ${esc(i.name)}">${pic(i)}</button>
-    <span class="t"><small class="lb">${esc(i.brand||"")}</small>${i.url?`<a class="nlink" href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.name)}<span aria-hidden="true"> ↗</span></a>`:`<b>${esc(i.name)}</b>`}<small>${esc([i.store,buyLine(i)||i.colour].filter(Boolean).join(" · "))}</small>${!main(i.id)&&i.url?`<button type="button" class="linkbtn getph" data-getph="${esc(i.id)}">Add photo from the store</button>`:""}</span>
+    <span class="t"><small class="lb">${esc(i.brand||"")}</small>${i.url?`<a class="nlink" href="${esc(safeUrl(i.url))}" target="_blank" rel="noopener">${esc(i.name)}<span aria-hidden="true"> ↗</span></a>`:`<b>${esc(i.name)}</b>`}<small>${esc([i.store,buyLine(i)||i.colour].filter(Boolean).join(" · "))}</small>${!main(i.id)&&i.url?`<button type="button" class="linkbtn getph" data-getph="${esc(i.id)}">Add photo from the store</button>`:""}</span>
     <span class="pr">${priceOf(i)}${d?`<small class="was"><s>$${(+i.was).toFixed(2)}</s> −${d}%</small>`:""}</span></div>`};
   const groups=lType==="all"?GROUPS:GROUPS.filter(([k])=>k===lType);
   document.getElementById("llist").innerHTML=groups.map(([k,l])=>{const g=items.filter(i=>i.slot===k);return g.length?`<section class="lgrp"><h2>${l}<small>${g.length}</small></h2><div class="list">${g.map(row).join("")}</div></section>`:""}).join("")||`<p class="empty">Nothing matches.</p>`}
@@ -934,7 +988,7 @@ function renderShop(){
   function row(i){const d=pct(i),diff=i.inStore&&i.price?(+i.price-(+i.inStore)):0;
    return `<div class="srow${i.status==="bought"?" done":""}"><button type="button" class="chk" data-buy="${esc(i.id)}" aria-pressed="${i.status==="bought"}" aria-label="Bought: ${esc(i.name)}">${i.status==="bought"?"✓":""}</button>
    <button type="button" class="thumb" data-id="${esc(i.id)}" style="border:0;padding:0;cursor:pointer" aria-label="Open ${esc(i.name)}">${pic(i)}</button>
-   <span class="t">${i.url?`<a class="nlink" href="${esc(i.url)}" target="_blank" rel="noopener">${esc((i.brand?i.brand+" ":"")+i.name)}<span aria-hidden="true"> ↗</span></a>`:`<b>${esc((i.brand?i.brand+" ":"")+i.name)}</b>`}<small>${esc([i.colour,i.note&&i.note.match(/confirm[^.]*/i)?.[0]].filter(Boolean).join(" · "))}</small>${i.sizes?`<span class="minis">${sizeChips(i,"mini")}</span>`:""}</span>
+   <span class="t">${i.url?`<a class="nlink" href="${esc(safeUrl(i.url))}" target="_blank" rel="noopener">${esc((i.brand?i.brand+" ":"")+i.name)}<span aria-hidden="true"> ↗</span></a>`:`<b>${esc((i.brand?i.brand+" ":"")+i.name)}</b>`}<small>${esc([i.colour,i.note&&i.note.match(/confirm[^.]*/i)?.[0]].filter(Boolean).join(" · "))}</small>${i.sizes?`<span class="minis">${sizeChips(i,"mini")}</span>`:""}</span>
    <span class="pr">${priceOf(i)}${d?`<s>was $${(+i.was).toFixed(2)} · −${d}%</s>`:""}<input type="number" min="0" step="0.01" inputmode="decimal" placeholder="Shelf $" aria-label="Shelf price for ${esc(i.name)}" data-instore="${esc(i.id)}" value="${i.inStore||""}">${diff>0?`<span class="save" style="display:block">$${diff.toFixed(2)} cheaper</span>`:diff<0?`<span class="save" style="display:block;color:#dc2626">$${(-diff).toFixed(2)} more</span>`:""}</span></div>`}}
 function render(){renderTabs();renderRack();renderList();renderShop()}
 function go(v){navTo(v)}
@@ -947,9 +1001,9 @@ function go(v){navTo(v)}
 const sheet=document.getElementById("sheet");let openId=null,photoIx=0;
 function openItem(id){openId=id;photoIx=0;drawSheet();if(!sheet.open)sheet.showModal()}
 function drawSheet(){const i=item(openId);if(!i)return;const ps=PH[i.id]||[],p=ps[photoIx],d=pct(i);
-  sheet.innerHTML=`<div class="sh">${sheetBar()}<div class="zoomwrap"><div class="zoom" id="zoom">${p?`<img src="${p.full}" alt="${esc(i.name)}, full photo">`:`<div style="text-align:center;color:var(--muted);padding:30px">${pic(i)}<p style="font-size:14px;margin-top:16px">No photo yet. Copy the product photo on the store page,<br>then press Paste photo below (or Ctrl+V).</p></div>`}</div>
+  sheet.innerHTML=`<div class="sh">${sheetBar()}<div class="zoomwrap"><div class="zoom" id="zoom">${p?`<img src="${imgSrc(p.full)}" alt="${esc(i.name)}, full photo">`:`<div style="text-align:center;color:var(--muted);padding:30px">${pic(i)}<p style="font-size:14px;margin-top:16px">No photo yet. Copy the product photo on the store page,<br>then press Paste photo below (or Ctrl+V).</p></div>`}</div>
     ${p?'<span class="zhint">Double-tap or pinch to see the fabric</span>':""}
-    ${ps.length>1?`<div class="thumbs">${ps.map((x,k)=>`<button type="button" data-ph="${k}" aria-pressed="${k===photoIx}" aria-label="Photo ${k+1}"><img src="${x.cut}" alt=""></button>`).join("")}</div>`:""}</div>
+    ${ps.length>1?`<div class="thumbs">${ps.map((x,k)=>`<button type="button" data-ph="${k}" aria-pressed="${k===photoIx}" aria-label="Photo ${k+1}"><img src="${imgSrc(x.cut)}" alt=""></button>`).join("")}</div>`:""}</div>
    <div class="info">
     <div class="br">${esc(i.brand||i.store)}</div><h2>${esc(i.name)}</h2>
     <div class="price"><b>${priceOf(i)}</b>${i.was&&d?`<s>$${(+i.was).toFixed(2)}</s><span class="off">−${d}%</span>`:""}</div>${buyLine(i)?`<p class="buy"><b>Buy:</b> ${esc(buyLine(i))}</p>`:""}
@@ -957,7 +1011,7 @@ function drawSheet(){const i=item(openId);if(!i)return;const ps=PH[i.id]||[],p=p
     <dl class="facts">${[["Store",i.store],["Sold from",i.from],["Made in",i.made],["Material",i.material],["Colour",i.colour],["Status",{want:"On the list",bought:"Bought",parked:"Parked"}[i.status]]].filter(x=>x[1]).map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
     ${i.note?`<p class="note">${esc(i.note)}</p>`:""}${i.say?`<div class="quote"><small>SirFay</small>“${esc(i.say)}”</div>`:""}
     <label class="instore">Shelf price in store $<input type="number" min="0" step="0.01" inputmode="decimal" id="shIn" value="${i.inStore||""}" placeholder="${i.price||""}"></label>
-    <div class="acts"><button type="button" class="btn pri" id="shBuy">${i.status==="bought"?"✓ Bought":"Mark bought"}</button>${i.url?`<a class="btn gry" href="${esc(i.url)}" target="_blank" rel="noopener">Listing ↗</a>`:""}</div>
+    <div class="acts"><button type="button" class="btn pri" id="shBuy">${i.status==="bought"?"✓ Bought":"Mark bought"}</button>${i.url?`<a class="btn gry" href="${esc(safeUrl(i.url))}" target="_blank" rel="noopener">Listing ↗</a>`:""}</div>
     <div class="acts">${i.url?'<button type="button" class="btn gry sm" id="shInfo">Get details from link</button>':""}${!p&&i.url?'<button type="button" class="btn gry sm" id="shAsk">Copy photo from the store</button>':""}<button type="button" class="btn gry sm" id="shPaste">Paste photo</button><button type="button" class="btn gry sm" id="shFile">Add photo</button><input type="file" accept="image/*" multiple id="shFileIn" hidden>${p?'<button type="button" class="btn gry sm" id="shDelP">Remove this photo</button>':""}<button type="button" class="btn gry sm" id="shPark">${i.status==="parked"?"Unpark":"Park"}</button><button type="button" class="btn gry sm" id="shEdit">Edit</button>${i.custom?'<button type="button" class="btn danger sm" id="shDel">Delete item</button>':""}</div>
    </div></div>`;
   const $=x=>document.getElementById(x);
@@ -1002,7 +1056,7 @@ const form=document.getElementById("form"),statusEl=document.getElementById("sta
 function fill(o,mark=true){let n=0;for(const [k,v] of Object.entries(o)){const f=form.elements[k];if(!f||v==null||v==="")continue;if(f.value&&f.value===String(v))continue;f.value=v;n++;if(mark){f.closest(".fld")?.classList.add("hl");setTimeout(()=>f.closest(".fld")?.classList.remove("hl"),2500)}}
   if(o.slot==null&&o.name)form.elements.slot.value=guessSlot(o.name+" "+(o.material||""))||form.elements.slot.value;
   return n}
-function drawDrop(){const d=document.getElementById("drop");d.innerHTML=pending.length?`<img src="${pending[0].cut}" alt="Photo to add">${pending.length>1?`<span class="zhint">${pending.length} photos</span>`:""}`:`<span>Product photo<br><br>Copy the photo on the store page,<br>then paste here (Ctrl+V / ⌘V),<br>drop it, or choose a file.</span>`}
+function drawDrop(){const d=document.getElementById("drop");d.innerHTML=pending.length?`<img src="${imgSrc(pending[0].cut)}" alt="Photo to add">${pending.length>1?`<span class="zhint">${pending.length} photos</span>`:""}`:`<span>Product photo<br><br>Copy the photo on the store page,<br>then paste here (Ctrl+V / ⌘V),<br>drop it, or choose a file.</span>`}
 async function pend(make){try{statusEl.textContent="Cutting out the photo…";pending.push(await make());drawDrop();statusEl.textContent="Photo ready."}catch(e){statusEl.textContent=e.message==="blocked"?"That store blocks using its photo by link. On the product page: Copy image, then Paste photo.":"Couldn't read that image."}}
 document.getElementById("getBtn").onclick=async()=>{
   const u=document.getElementById("link").value.trim();if(!/^https?:\/\//i.test(u)){statusEl.textContent="Paste a full link starting with https://";return}
@@ -1018,7 +1072,7 @@ document.getElementById("readBtn").onclick=()=>{const b=fromText(document.getEle
   if(b.image&&!pending.length)photoFromUrl(b.image).then(p=>{pending.push(p);drawDrop()},()=>{})};
 form.onsubmit=e=>{e.preventDefault();const f=Object.fromEntries(new FormData(form));
   const it=editing?item(editing):{id:"c"+Date.now().toString(36),custom:1,status:"want",color:"#a8a29e"};
-  Object.assign(it,{name:f.name.trim(),brand:f.brand.trim(),store:f.store.trim()||"Found in store",price:+f.price||0,was:+f.was||0,slot:f.slot,sizes:f.sizes.trim(),from:f.from.trim(),made:f.made.trim(),material:f.material.trim(),colour:f.colour.trim(),note:f.note.trim(),url:f.url.trim(),buySize:f.buySize.trim(),qty:+f.qty||0,maxPrice:+f.maxPrice||0,subs:f.subs,priority:f.priority});
+  Object.assign(it,{name:f.name.trim(),brand:f.brand.trim(),store:f.store.trim()||"Found in store",price:+f.price||0,was:+f.was||0,slot:f.slot,sizes:f.sizes.trim(),from:f.from.trim(),made:f.made.trim(),material:f.material.trim(),colour:f.colour.trim(),note:f.note.trim(),url:safeUrl(f.url),buySize:f.buySize.trim(),qty:+f.qty||0,maxPrice:+f.maxPrice||0,subs:f.subs,priority:f.priority});
   if(!editing)S.items.push(it);
   if(pending.length){setPhotos(it.id,[...(PH[it.id]||[]),...pending]);it.color=pending[0].color}else if(!main(it.id))it.color=colourHex(it.colour)||it.color
   const was=editing;editing=null;pending=[];form.reset();drawDrop();document.getElementById("pageText").value="";document.getElementById("link").value="";statusEl.textContent="";
@@ -1082,17 +1136,17 @@ function helperHTML(b,items,prog,photo){
   const est=items.reduce((s,i)=>s+(+i.price||0)*(+i.qty||1),0);
   const by={};items.forEach(i=>{const k=i.store||"Any store";(by[k]=by[k]||[]).push(i)});
   const card=i=>{const p=prog[i.id]||{},d=pct(i),ph=photo(i.id);return `<article class="hcard s-${p.s||"todo"}" data-hid="${esc(i.id)}">
-   <div class="hpic">${ph?`<img src="${ph}" alt="${esc(i.name)}">`:pic(i)}${i.priority==="must"?'<span class="st">Must have</span>':i.priority==="nice"?'<span class="st">Nice to have</span>':""}</div>
+   <div class="hpic">${ph?`<img src="${imgSrc(ph)}" alt="${esc(i.name)}">`:pic(i)}${i.priority==="must"?'<span class="st">Must have</span>':i.priority==="nice"?'<span class="st">Nice to have</span>':""}</div>
    <div class="hbody"><div class="br">${esc(i.brand||"")}</div><h3>${esc(i.name)}</h3>
     ${buyLine(i)?`<p class="buy"><b>Buy:</b> ${esc(buyLine(i))}</p>`:""}
     <p class="hprice"><b>${priceOf(i)}</b>${d?` <s>$${(+i.was).toFixed(2)}</s> <span class="off">−${d}%</span>`:""} <span class="muted">at ${esc(i.store||"any store")}</span></p>
     <dl class="facts">${[["Sizes in stock online",i.sizes],["Material",i.material],["Made in",i.made],["Sold from",i.from]].filter(x=>x[1]).map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
     ${i.note?`<p class="note">${esc(i.note)}</p>`:""}
-    ${i.url?`<p class="lnk"><a href="${esc(i.url)}" target="_blank" rel="noopener">Open the store listing ↗</a></p>`:""}
+    ${i.url?`<p class="lnk"><a href="${esc(safeUrl(i.url))}" target="_blank" rel="noopener">Open the store listing ↗</a></p>`:""}
     <div class="hact noprint"><div class="seg" role="group" aria-label="Result">${[["got","Got it"],["sub","Got similar"],["none","Not found"]].map(([k,l])=>`<button type="button" data-hs="${k}" aria-pressed="${p.s===k}">${l}</button>`).join("")}</div>
       <label class="paid">Paid $<input type="number" min="0" step="0.01" inputmode="decimal" data-hp value="${p.paid||""}" aria-label="Price paid"></label>
       <input type="text" data-hn placeholder="Note: size, colour, store…" value="${esc(p.note||"")}" aria-label="Note">
-      <button type="button" class="btn gry sm" data-hph>${p.photo?"Retake photo":"Photo of it"}</button>${p.photo?`<img class="hshot" src="${p.photo}" alt="Photo of what was bought">`:""}</div>
+      <button type="button" class="btn gry sm" data-hph>${p.photo?"Retake photo":"Photo of it"}</button>${p.photo?`<img class="hshot" src="${imgSrc(p.photo)}" alt="Photo of what was bought">`:""}</div>
    </div></article>`};
   return `<div class="vhead"><p class="eyebrow">Shopping list${b.me?` from ${esc(b.me)}`:""}</p><h1>Hi${b.helper?" "+esc(b.helper):""}, here's what to get.</h1>${b.msg?`<p>${esc(b.msg)}</p>`:""}</div>
    <div class="cards"><div class="card"><h3>Progress</h3><div class="big">${done.length}/${items.length}</div><p class="muted" style="margin:2px 0 0;font-size:14px">$${spent.toFixed(2)} spent${b.budget?` of a $${(+b.budget).toFixed(0)} budget`:""} · list total about $${est.toFixed(2)}</p><div class="track"><div class="fill" style="width:${items.length?(done.length/items.length*100).toFixed(1):0}%"></div></div></div>
@@ -1126,7 +1180,7 @@ function openSend(){const d=Object.assign({helper:"",me:"",msg:"",budget:""},S.s
   const sel=new Set((d.ids||[]).filter(id=>item(id)));if(!sel.size)cand.filter(i=>i.status!=="bought").forEach(i=>sel.add(i.id));
   sheet.innerHTML=`<div class="info sendsheet">${sheetBar()}
    <div class="br">Send to a helper</div><h2>Who's doing the shopping?</h2>
-   <form id="sendF" class="f" style="margin-top:4px" onsubmit="return false">
+   <form id="sendF" class="f" style="margin-top:4px">
     <label class="fld">Their name<input name="helper" value="${esc(d.helper)}" placeholder="e.g. Ada"></label>
     <label class="fld">Your name<input name="me" value="${esc(d.me)}"></label>
     <label class="fld full">Message<input name="msg" value="${esc(d.msg)}" placeholder="Thank you! Sizes and links are inside."></label>
@@ -1136,7 +1190,8 @@ function openSend(){const d=Object.assign({helper:"",me:"",msg:"",budget:""},S.s
    </form>
    <div class="acts"><button class="btn pri" id="sdFile" type="button">Send helper copy</button><button class="btn gry" id="sdText" type="button">Send as message</button></div>
    <p class="muted" style="font-size:13px;margin-top:12px"><b>Helper copy:</b> one file with every detail and photo. They open it on their phone (no internet needed), tick what they got, add the price and a photo, and tap Send update. You import that here (Shop → Import their update). Add more items later? Send a new copy: their ticks carry over.<br><b>Message:</b> the same details as plain text for WhatsApp, without photos.</p></div>`;
-  const F=sheet.querySelector("#sendF"),read=()=>{const f=new FormData(F);return {helper:f.get("helper").trim(),me:f.get("me").trim(),msg:f.get("msg").trim(),budget:f.get("budget"),ids:f.getAll("ids")}};
+  const F=sheet.querySelector("#sendF");F.onsubmit=e=>e.preventDefault();   /* was an inline onsubmit attribute; the CSP forbids those */
+  const read=()=>{const f=new FormData(F);return {helper:f.get("helper").trim(),me:f.get("me").trim(),msg:f.get("msg").trim(),budget:f.get("budget"),ids:f.getAll("ids")}};
   F.onchange=()=>{sheet.querySelector("#pkN").textContent=F.querySelectorAll("input[name=ids]:checked").length};
   sheet.querySelector("#pkAll").onclick=()=>{F.querySelectorAll("input[name=ids]").forEach(c=>c.checked=true);F.onchange()};
   sheet.querySelector("#pkNone").onclick=()=>{F.querySelectorAll("input[name=ids]").forEach(c=>c.checked=false);F.onchange()};
@@ -1150,16 +1205,20 @@ function openSend(){const d=Object.assign({helper:"",me:"",msg:"",budget:""},S.s
   sheet.querySelector("#sdText").onclick=()=>{const d=read();if(!d.ids.length)return toast("Pick at least one item");S.send=d;save();shareText(briefText(d,d.ids.map(item).filter(Boolean)),"Shopping list")};
   if(!sheet.open)sheet.showModal()}
 /* Import a helper's update: their results become ticks, shelf prices, notes and photos on your list. */
-function mergeUpdate(u){S.imported=S.imported||[];if(S.imported.includes(u.at))return toast("That update was already imported");
-  let got=0,none=0;for(const [id,p] of Object.entries(u.items||{})){const i=item(id);if(!i||(!p.s&&!p.note&&!p.photo))continue;
+function mergeUpdate(u){if(!isObj(u)||!isObj(u.items)||!Number.isFinite(u.at))return toast("That update file isn't valid");   // check the file's shape before trusting it
+  S.imported=S.imported||[];if(S.imported.includes(u.at))return toast("That update was already imported");
+  let got=0,none=0;for(const [id,p0] of Object.entries(u.items||{})){const i=item(id);if(!i||!isObj(p0))continue;
+    // keep only the known fields of the helper's result, each the right type and length
+    const p={s:["got","sub","none"].includes(p0.s)?p0.s:"",note:cleanStr(p0.note,500),paid:Math.min(Math.max(+p0.paid||0,0),1e5),photo:okImg(p0.photo)?p0.photo:""};
+    if(!p.s&&!p.note&&!p.photo)continue;
     if(p.s==="got"||p.s==="sub"){i.status="bought";got++;if(+p.paid)i.inStore=+p.paid}else if(p.s==="none")none++;
-    const who=(u.helper||"Helper")+(p.s==="sub"?" (bought a similar one)":p.s==="none"?" (not found)":"");
+    const who=cleanStr(u.helper,60)||"Helper"+(p.s==="sub"?" (bought a similar one)":p.s==="none"?" (not found)":"");
     if(p.note||p.s==="sub"||p.s==="none")i.note=((i.note||"")+`\n${who}${p.note?": "+p.note:""}`).trim();
-    if(p.photo)setPhotos(id,[...(PH[id]||[]),{cut:p.photo,full:p.photo,color:i.color,isCut:false}])}
-  S.imported.push(u.at);commit();toast(`Update from ${u.helper||"your helper"}: ${got} bought, ${none} not found`)}
+    if(okImg(p.photo))setPhotos(id,[...(PH[id]||[]),{cut:p.photo,full:p.photo,color:hexOk(i.color),isCut:false}])}
+  S.imported.push(u.at);commit();toast(`Update from ${cleanStr(u.helper,60)||"your helper"}: ${got} bought, ${none} not found`)}
 /* ---- helper mode (runs only inside a helper copy) ---- */
-function startHelper(emb){H={brief:emb.brief,items:emb.state.items};H.prog=LS.get("sfr_help_"+H.brief.id,{});
-  S=Object.assign(fresh(),{items:H.items});Object.assign(PH,emb.photos||{});
+function startHelper(emb){H={brief:{id:cleanStr(emb.brief&&emb.brief.id,40).replace(/[^\w-]/g,""),helper:cleanStr(emb.brief&&emb.brief.helper,80),me:cleanStr(emb.brief&&emb.brief.me,80),msg:cleanStr(emb.brief&&emb.brief.msg,1000),budget:Math.min(Math.max(+(emb.brief&&emb.brief.budget)||0,0),1e7)},items:cleanItems(emb.state&&emb.state.items)};H.prog=LS.get("sfr_help_"+H.brief.id,{});
+  S=Object.assign(fresh(),{items:H.items});Object.assign(PH,cleanPhotoMap(emb.photos));
   document.body.classList.add("helper");document.querySelectorAll(".view").forEach(v=>v.classList.toggle("on",v.id==="v-helper"));renderHelper()}
 function renderHelper(){document.getElementById("v-helper").innerHTML=helperHTML(H.brief,H.items,H.prog,id=>main(id)&&main(id).cut)}
 function hSave(){if(!LS.set("sfr_help_"+H.brief.id,H.prog))toast("Storage is full: send your update now so nothing is lost")}
@@ -1193,7 +1252,7 @@ document.getElementById("bulkGo").onclick=async()=>{const links=[...new Set(docu
    press Ctrl+V / ⌘V): it is cut out and saved on that item. "Get details from link" re-reads an item's store page
    for price, discount, sizes and material; if the page can't be read, it opens Edit so you can paste the page text. */
 let photoTarget=null;
-function askPhoto(id){const i=item(id);if(!i)return;photoTarget=id;if(i.url)window.open(i.url,"_blank","noopener");drawPbar()}
+function askPhoto(id){const i=item(id);if(!i)return;photoTarget=id;if(i.url)window.open(safeUrl(i.url)||"about:blank","_blank","noopener");drawPbar()}
 function endPhoto(){photoTarget=null;drawPbar()}
 function drawPbar(){const b=document.getElementById("pbar"),i=photoTarget&&item(photoTarget);if(!i){b.hidden=true;b.innerHTML="";return}
   b.hidden=false;b.innerHTML=`<span><b>Photo for ${esc((i.brand?i.brand+" ":"")+i.name)}</b><small>On the store page, copy the product photo (press and hold, or right-click → Copy image). Then come back and tap Paste.</small></span>
@@ -1236,19 +1295,19 @@ function stamp(){if(!snapReady||!S)return 0;const now=Date.now();let n=0;S.delet
   return n}
 async function mergeIn(remote,getPhoto){if(!remote)return false;let changed=false;
   S.deleted=S.deleted||{};S.photoV=S.photoV||{};
-  for(const [id,t] of Object.entries(remote.deleted||{}))if(t>(S.deleted[id]||0))S.deleted[id]=t;
-  const rmap=new Map((remote.items||[]).map(i=>[i.id,i])),out=[];
+  for(const [id,t] of Object.entries(cleanStamps(remote.deleted)))if(t>(S.deleted[id]||0))S.deleted[id]=t;
+  const rmap=new Map(cleanItems(remote.items).map(i=>[i.id,i])),out=[];
   for(const li of S.items){const d=S.deleted[li.id]||0;if(d&&d>=(li.u||0)){changed=true;continue}
     const ri=rmap.get(li.id);rmap.delete(li.id);
     if(ri&&(ri.u||0)>=(li.u||0)&&JSON.stringify(ri)!==JSON.stringify(li)){out.push(ri);changed=true}else out.push(li)}
   for(const ri of rmap.values())if(!((S.deleted[ri.id]||0)>=(ri.u||0)&&S.deleted[ri.id])){out.push(ri);changed=true}
   S.items=out;
-  if(remote.budget&&!S.budget)S.budget=remote.budget;
+  if(remote.budget&&!S.budget)S.budget=cleanState({budget:remote.budget}).budget;
   // photos: fetch only the ones that are newer elsewhere
-  const want=Object.entries(remote.photoV||{}).filter(([id,t])=>Math.abs(t)>Math.abs(S.photoV[id]||0)&&!(S.photoDirty||{})[id]);
+  const want=Object.entries(cleanStamps(remote.photoV)).filter(([id,t])=>Math.abs(t)>Math.abs(S.photoV[id]||0)&&!(S.photoDirty||{})[id]);
   let k=0;const next=async()=>{while(k<want.length){const [id,t]=want[k++];
     if(t<0){delete PH[id];DB.del(id);S.photoV[id]=t;changed=true;continue}
-    try{const list=await getPhoto(id);if(list&&list.length){PH[id]=list;DB.put(id,list);S.photoV[id]=t;changed=true}}catch(e){}}};
+    try{const list=cleanPhotos(await getPhoto(id));if(list.length){PH[id]=list;DB.put(id,list);S.photoV[id]=t;changed=true}}catch(e){}}};
   await Promise.all([next(),next(),next(),next()]);
   if(changed){resnap();saveQuiet();if(typeof render==="function"&&!H)render()}
   return changed}
@@ -1295,7 +1354,10 @@ function syncStart(){if(H)return;const c=document.getElementById("syncCard");if(
   addEventListener("online",()=>{syncPull()});
   document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&Date.now()-lastPull>60000)syncPull()})}
 document.getElementById("tokSave").onclick=async()=>{const v=document.getElementById("tokIn").value.trim(),m=document.getElementById("tokMsg");
-  if(!/^(github_pat_|ghp_)\w{20,}/.test(v)){m.textContent="That doesn't look like a GitHub key (it starts with github_pat_).";return}
+  // Only fine-grained keys (github_pat_...) are accepted: they can be limited to one repository. Classic keys (ghp_...)
+  // open every repository on the account, so they are refused with a plain explanation.
+  if(/^gh[pousr]_/.test(v)){m.textContent="That is a classic GitHub key, which reaches every repository on the account, so this app will not take it. Make a fine-grained key instead: limit it to the one repository sirfay-wardrobe, with Contents set to Read and write. It starts with github_pat_.";return}
+  if(!/^github_pat_\w{20,}$/.test(v)){m.textContent="That doesn't look like a fine-grained GitHub key (it starts with github_pat_).";return}
   try{localStorage.setItem("sfr_token",v)}catch(e){m.textContent="This browser won't store the key.";return}
   document.getElementById("tokIn").value="";m.textContent="Checking the key…";
   try{await gh("GET","README.md");m.textContent="Key saved. Changes on this phone now save to the website.";S.dirty=true;saveQuiet();syncPush()}
@@ -1393,7 +1455,7 @@ const _render=render;render=function(){_render();if(navReady){drawBack();reveal(
 <script>
 /* ===================== WIRING + START ===================== */
 function commit(){save();render()}
-function load(d){if(d.state)S=Object.assign(fresh(),d.state);if(d.photos)for(const [k,v] of Object.entries(d.photos)){PH[k]=v;DB.put(k,v)}}
+function load(d){if(!isObj(d))return;if(d.state)S=Object.assign(fresh(),cleanState(d.state));const ph=cleanPhotoMap(d.photos);for(const k of Object.keys(ph)){PH[k]=ph[k];DB.put(k,ph[k])}}   // outside data is cleaned first
 document.addEventListener("click",e=>{const t=e.target.closest("[data-v],[data-s],[data-id],[data-lt],[data-ls],[data-buy],[data-getph],#copyLinks,#sendBtn,#impBtn");if(!t||(H&&!t.closest("#v-helper")&&!t.dataset.v))return;
   if(t.dataset.v)return go(t.dataset.v);
   if(t.dataset.s)return sort=t.dataset.s,renderRack();
@@ -1415,10 +1477,11 @@ document.getElementById("lq").addEventListener("input",e=>{lq=e.target.value.tri
   if(emb&&emb.mode==="helper"){startHelper(emb);return}
   // A copy with data baked in never overwrites this phone's changes: it is merged in, item by item, newest change wins.
   if(emb&&emb.state&&!local){load(emb);saveQuiet()}
-  else{S=local?Object.assign(fresh(),local):fresh();Object.assign(PH,await DB.all());if(emb&&emb.state)await mergeIn(emb.state,id=>emb.photos&&emb.photos[id])}
+  else{S=local?Object.assign(fresh(),local):fresh();Object.assign(PH,cleanPhotoMap(await DB.all()));if(emb&&emb.state)await mergeIn(emb.state,id=>emb.photos&&emb.photos[id])}
   {let _added=false;for(const _sd of SEED){if(!S.items.find(_i=>_i.id===_sd.id)&&!(S.deleted||{})[_sd.id]){S.items.push({status:"want",..._sd});_added=true}}if(_added)saveQuiet()}
   // carry over "bought" ticks from the earlier SirFay page, once
   const old=LS.get("sf_bought",null);if(old&&!S.migrated){for(const id in old){const i=item(id);if(i&&old[id])i.status="bought"}S.migrated=1;save()}
+  S.items.forEach(i=>{i.url=safeUrl(i.url)});   // links: web addresses only, even from older saved data
   document.getElementById("readerOpt").checked=!!S.reader;
   resnap();render();drawDrop();navInit();syncStart();
 })();

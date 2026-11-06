@@ -1,2 +1,4 @@
+# Kept as Disallow on purpose (T-026): polite crawlers then skip data.json and photos/*.json as well as the page.
+# The page also carries a noindex tag as a second layer for crawlers that find the address elsewhere.
 User-agent: *
 Disallow: /
